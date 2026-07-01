@@ -1,0 +1,172 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: postgresql://hivork:hivork_dev@localhost:5432/hivork?schema=public
+  REDIS_URL: redis://localhost:6379
+
+jobs:
+  quality:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hivork
+          POSTGRES_PASSWORD: hivork_dev
+          POSTGRES_DB: hivork
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hivork -d hivork"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Forbid Prisma hard delete
+        run: |
+          ! rg "\.(delete|deleteMany)\(" apps packages modules \
+            --glob "*.ts" --glob "!**/*.spec.ts" --glob "!**/prisma-soft-delete*"
+
+      - name: Prisma validate
+        run: pnpm db:validate
+
+      - name: Lint
+        run: pnpm turbo lint
+
+      - name: Typecheck
+        run: pnpm turbo typecheck
+
+      - name: Test
+        run: pnpm turbo test
+
+      - name: Build
+        run: pnpm turbo build
+
+  test-phase-01-auth:
+    name: Phase 01 auth gate (IFP-018)
+    runs-on: ubuntu-latest
+    needs: quality
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hivork
+          POSTGRES_PASSWORD: hivork_dev
+          POSTGRES_DB: hivork
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hivork -d hivork"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://hivork:hivork_dev@localhost:5432/hivork?schema=public
+      REDIS_URL: redis://localhost:6379
+      CAPTCHA_BYPASS_TOKEN: test-bypass
+      JWT_ACCESS_SECRET: ci-test-access-secret-min-32-chars!!
+      JWT_REFRESH_SECRET: ci-test-refresh-secret-min-32-chars!
+      MFA_ENCRYPTION_KEY: MDAxMjM0NTY3ODkwMTIzNDU2Nzg5MDEyMzQ1Njc4OTAx
+      PLAYWRIGHT_SKIP_WEBSERVER: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma migrate + seed
+        run: |
+          pnpm db:migrate:deploy
+          pnpm db:seed
+
+      - name: Build packages
+        run: pnpm turbo build --filter=@hivork/api --filter=@hivork/web
+
+      - name: Phase 01 integration tests
+        run: pnpm --filter @hivork/api exec vitest run src/phase-01-auth
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @hivork/web exec playwright install chromium --with-deps
+
+      - name: Start API for E2E
+        run: |
+          pnpm --filter @hivork/api start &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4000/health && break
+            sleep 2
+          done
+
+      - name: Start Web for E2E
+        run: |
+          pnpm --filter @hivork/web start &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/login && break
+            sleep 2
+          done
+
+      - name: Phase 01 Playwright E2E
+        run: pnpm --filter @hivork/web exec playwright test phase-01-auth
