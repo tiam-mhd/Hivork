@@ -1,0 +1,1002 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// TASK-017 — Platform admin/support users (not tenant-scoped)
+
+enum PlatformUserRole {
+  super_admin
+  support
+}
+
+enum PlatformUserStatus {
+  active
+  suspended
+}
+
+model PlatformUser {
+  id           String             @id @default(uuid()) @db.Uuid
+  phone        String             @unique @db.VarChar(11)
+  email        String?            @unique
+  name         String
+  role         PlatformUserRole   @default(support)
+  status       PlatformUserStatus @default(active)
+  lastLoginAt  DateTime?          @map("last_login_at") @db.Timestamptz
+  metadata     Json?              @db.JsonB
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+  createdById  String?            @map("created_by_id") @db.Uuid
+  updatedById  String?            @map("updated_by_id") @db.Uuid
+  deletedAt    DateTime?          @map("deleted_at") @db.Timestamptz
+  deletedById  String?            @map("deleted_by_id") @db.Uuid
+  deleteReason String?            @map("delete_reason")
+  version      Int                @default(1)
+
+  @@index([status])
+  @@map("platform_users")
+}
+
+// ADR-017 — Platform identity for Staff memberships + GlobalCustomer profile
+
+enum UserStatus {
+  active
+  suspended
+}
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  phone        String     @unique @db.VarChar(11)
+  name         String?
+  avatarUrl    String?    @map("avatar_url")
+  status       UserStatus @default(active)
+  lastLoginAt  DateTime?  @map("last_login_at") @db.Timestamptz
+  lastLoginIp  String?    @map("last_login_ip") @db.VarChar(45)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+  createdById  String?    @map("created_by_id") @db.Uuid
+  updatedById  String?    @map("updated_by_id") @db.Uuid
+  deletedAt    DateTime?  @map("deleted_at") @db.Timestamptz
+  deletedById  String?    @map("deleted_by_id") @db.Uuid
+  deleteReason String?    @map("delete_reason")
+  version      Int        @default(1)
+  metadata     Json?      @db.JsonB
+
+  staffMemberships Staff[]
+  globalCustomer   GlobalCustomer?
+  credential       UserCredential?
+  mfaTotp          UserMfaTotp?
+  staffSessions    StaffSession[]
+
+  @@index([status])
+  @@map("users")
+}
+
+// ADR-019 — Platform password credential (IFP-TASK-001)
+
+enum CredentialStatus {
+  active
+  locked
+  must_change_password
+
+  @@map("credential_status")
+}
+
+model UserCredential {
+  id                 String           @id @default(uuid()) @db.Uuid
+  userId             String           @unique @map("user_id") @db.Uuid
+  passwordHash       String           @map("password_hash") @db.VarChar(255)
+  passwordChangedAt  DateTime?        @map("password_changed_at") @db.Timestamptz
+  mustChangePassword Boolean          @default(false) @map("must_change_password")
+  status             CredentialStatus @default(active)
+  failedLoginCount   Int              @default(0) @map("failed_login_count")
+  lockedUntil        DateTime?        @map("locked_until") @db.Timestamptz
+  lastFailedLoginAt  DateTime?        @map("last_failed_login_at") @db.Timestamptz
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  createdById        String?          @map("created_by_id") @db.Uuid
+  updatedById        String?          @map("updated_by_id") @db.Uuid
+  deletedAt          DateTime?        @map("deleted_at") @db.Timestamptz
+  deletedById        String?          @map("deleted_by_id") @db.Uuid
+  deleteReason       String?          @map("delete_reason")
+  version            Int              @default(1)
+  metadata           Json?            @db.JsonB
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@index([lockedUntil])
+  @@map("user_credentials")
+}
+
+// IFP-TASK-005 — Platform TOTP MFA (User-level, ADR-017)
+
+model UserMfaTotp {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @unique @map("user_id") @db.Uuid
+  secretEncrypted String    @map("secret_encrypted") @db.Text
+  enabledAt       DateTime? @map("enabled_at") @db.Timestamptz
+  lastUsedAt      DateTime? @map("last_used_at") @db.Timestamptz
+  backupCodesHash Json?     @map("backup_codes_hash") @db.JsonB
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById     String?   @map("created_by_id") @db.Uuid
+  updatedById     String?   @map("updated_by_id") @db.Uuid
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById     String?   @map("deleted_by_id") @db.Uuid
+  deleteReason    String?   @map("delete_reason")
+  version         Int       @default(1)
+  metadata        Json?     @db.JsonB
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([enabledAt])
+  @@map("user_mfa_totp")
+}
+
+// TASK-018 — Tenant SaaS + Plan entitlement (shared enums used in TASK-020, 021)
+
+enum DataScope {
+  all
+  branch
+  own
+}
+
+enum Locale {
+  fa_IR
+  en_US
+}
+
+enum TenantStatus {
+  trial
+  active
+  suspended
+}
+
+enum SubscriptionStatus {
+  active
+  past_due
+  cancelled
+}
+
+model Plan {
+  id           String    @id @default(uuid()) @db.Uuid
+  code         String    @unique
+  name         String
+  modules      String[]
+  maxCustomers Int       @map("max_customers")
+  maxStaff     Int       @map("max_staff")
+  maxBranches  Int       @map("max_branches")
+  priceRial    BigInt    @map("price_rial")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById  String?   @map("created_by_id") @db.Uuid
+  updatedById  String?   @map("updated_by_id") @db.Uuid
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById  String?   @map("deleted_by_id") @db.Uuid
+  deleteReason String?   @map("delete_reason")
+  version      Int       @default(1)
+  metadata     Json?     @db.JsonB
+
+  tenants Tenant[]
+
+  @@map("plans")
+}
+
+model Tenant {
+  id                    String       @id @default(uuid()) @db.Uuid
+  name                  String
+  slug                  String       @unique
+  legalName             String?      @map("legal_name")
+  taxId                 String?      @map("tax_id")
+  logoUrl               String?      @map("logo_url")
+  address               String?
+  phone                 String?      @db.VarChar(11)
+  email                 String?
+  status                TenantStatus @default(trial)
+  statusReason          String?      @map("status_reason")
+  planId                String       @map("plan_id") @db.Uuid
+  enabledModules        String[]     @map("enabled_modules")
+  timezone              String       @default("Asia/Tehran")
+  locale                Locale       @default(fa_IR)
+  trialEndsAt           DateTime?    @map("trial_ends_at") @db.Timestamptz
+  suspendedAt           DateTime?    @map("suspended_at") @db.Timestamptz
+  onboardingCompletedAt DateTime?    @map("onboarding_completed_at") @db.Timestamptz
+  createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  createdById           String?      @map("created_by_id") @db.Uuid
+  updatedById           String?      @map("updated_by_id") @db.Uuid
+  deletedAt             DateTime?    @map("deleted_at") @db.Timestamptz
+  deletedById           String?      @map("deleted_by_id") @db.Uuid
+  deleteReason          String?      @map("delete_reason")
+  version               Int          @default(1)
+  metadata              Json?        @db.JsonB
+
+  plan            Plan             @relation(fields: [planId], references: [id], onDelete: Restrict)
+  branches        Branch[]
+  staff           Staff[]
+  tenantCustomers TenantCustomer[]
+  settings        TenantSetting[]
+  subscriptions   Subscription[]
+  sales           Sale[]
+  installments    Installment[]
+  paymentAttempts PaymentAttempt[]
+  idempotencyRecords IdempotencyRecord[]
+  staffSessions      StaffSession[]
+  apiKeys            TenantApiKey[]
+  staffSavedFilters  StaffSavedFilter[]
+  staffSavedViews    StaffSavedView[]
+
+  @@index([status])
+  @@index([planId])
+  @@map("tenants")
+}
+
+model Subscription {
+  id           String             @id @default(uuid()) @db.Uuid
+  tenantId     String             @map("tenant_id") @db.Uuid
+  planId       String             @map("plan_id") @db.Uuid
+  status       SubscriptionStatus @default(active)
+  startsAt     DateTime           @map("starts_at") @db.Timestamptz
+  endsAt       DateTime?          @map("ends_at") @db.Timestamptz
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+  createdById  String?            @map("created_by_id") @db.Uuid
+  updatedById  String?            @map("updated_by_id") @db.Uuid
+  deletedAt    DateTime?          @map("deleted_at") @db.Timestamptz
+  deletedById  String?            @map("deleted_by_id") @db.Uuid
+  deleteReason String?            @map("delete_reason")
+  version      Int                @default(1)
+  metadata     Json?              @db.JsonB
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("subscriptions")
+}
+
+// TASK-019 — Branch (operational partition per tenant)
+
+model Branch {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  name         String
+  address      String?
+  phone        String?   @db.VarChar(11)
+  isDefault    Boolean   @default(false) @map("is_default")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById  String?   @map("created_by_id") @db.Uuid
+  updatedById  String?   @map("updated_by_id") @db.Uuid
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById  String?   @map("deleted_by_id") @db.Uuid
+  deleteReason String?   @map("delete_reason")
+  version      Int       @default(1)
+  metadata     Json?     @db.JsonB
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  staffPrimaryFor Staff[]          @relation("StaffPrimaryBranch")
+  tenantCustomers TenantCustomer[]
+  settings        BranchSetting[]
+  sales           Sale[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, isDefault])
+  @@map("branches")
+}
+
+// TASK-020 — Staff (tenant-internal actor)
+
+enum StaffStatus {
+  active
+  suspended
+}
+
+enum SessionStatus {
+  active
+  revoked
+  expired
+
+  @@map("session_status")
+}
+
+model Staff {
+  id                String      @id @default(uuid()) @db.Uuid
+  tenantId          String      @map("tenant_id") @db.Uuid
+  userId            String      @map("user_id") @db.Uuid
+  name              String
+  email             String?
+  nationalId        String?     @map("national_id")
+  avatarUrl         String?     @map("avatar_url")
+  jobTitle          String?     @map("job_title")
+  status            StaffStatus @default(active)
+  dataScope         DataScope   @default(all) @map("data_scope")
+  assignedBranchIds String[]    @map("assigned_branch_ids") @db.Uuid
+  primaryBranchId   String?     @map("primary_branch_id") @db.Uuid
+  lastLoginAt       DateTime?   @map("last_login_at") @db.Timestamptz
+  lastLoginIp       String?     @map("last_login_ip") @db.VarChar(45)
+  lastLoginDeviceLabel String?  @map("last_login_device_label") @db.VarChar(120)
+  previousLoginAt   DateTime?   @map("previous_login_at") @db.Timestamptz
+  previousLoginIp   String?     @map("previous_login_ip") @db.VarChar(45)
+  previousLoginDeviceLabel String? @map("previous_login_device_label") @db.VarChar(120)
+  invitedAt         DateTime?   @map("invited_at") @db.Timestamptz
+  invitedById       String?     @map("invited_by_id") @db.Uuid
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+  createdById       String?     @map("created_by_id") @db.Uuid
+  updatedById       String?     @map("updated_by_id") @db.Uuid
+  deletedAt         DateTime?   @map("deleted_at") @db.Timestamptz
+  deletedById       String?     @map("deleted_by_id") @db.Uuid
+  deleteReason      String?     @map("delete_reason")
+  version           Int         @default(1)
+  metadata          Json?       @db.JsonB
+
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user          User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  primaryBranch Branch? @relation("StaffPrimaryBranch", fields: [primaryBranchId], references: [id], onDelete: SetNull)
+  staffRoles          StaffRole[]
+  permissionOverrides UserPermissionOverride[]
+  salesCreated        Sale[] @relation("SaleCreatedBy")
+  salesCancelled      Sale[] @relation("SaleCancelledBy")
+  installmentsConfirmed Installment[] @relation("InstallmentConfirmedBy")
+  installmentsWaived    Installment[] @relation("InstallmentWaivedBy")
+  paymentsConfirmed     PaymentAttempt[] @relation("PaymentConfirmedBy")
+  staffSessions         StaffSession[]
+  savedFilters          StaffSavedFilter[]
+  savedViews            StaffSavedView[]
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([userId])
+  @@map("staff")
+}
+
+// IFP-TASK-008 — Staff active sessions (device + refresh correlation)
+
+model StaffSession {
+  id                String        @id @default(uuid()) @db.Uuid
+  tenantId          String        @map("tenant_id") @db.Uuid
+  staffId           String        @map("staff_id") @db.Uuid
+  userId            String        @map("user_id") @db.Uuid
+  refreshTokenHash  String        @unique @map("refresh_token_hash") @db.VarChar(64)
+  deviceId          String?       @map("device_id") @db.VarChar(36)
+  deviceFingerprint String?       @map("device_fingerprint") @db.VarChar(128)
+  deviceLabel       String?       @map("device_label") @db.VarChar(120)
+  userAgent         String?       @map("user_agent") @db.Text
+  ipAddress         String?       @map("ip_address") @db.VarChar(45)
+  rememberMe        Boolean       @default(false) @map("remember_me")
+  status            SessionStatus @default(active)
+  lastActiveAt      DateTime      @default(now()) @map("last_active_at") @db.Timestamptz
+  expiresAt         DateTime      @map("expires_at") @db.Timestamptz
+  revokedAt         DateTime?     @map("revoked_at") @db.Timestamptz
+  revokedById       String?       @map("revoked_by_id") @db.Uuid
+  revokeReason      String?       @map("revoke_reason")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+  createdById       String?       @map("created_by_id") @db.Uuid
+  updatedById       String?       @map("updated_by_id") @db.Uuid
+  deletedAt         DateTime?     @map("deleted_at") @db.Timestamptz
+  deletedById       String?       @map("deleted_by_id") @db.Uuid
+  deleteReason      String?       @map("delete_reason")
+  version           Int           @default(1)
+  metadata          Json?         @db.JsonB
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  staff  Staff  @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, staffId, status])
+  @@index([tenantId, staffId, revokedAt])
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("staff_sessions")
+}
+
+// TASK-021 — RBAC (Role, Permission, overrides)
+
+enum RoleScope {
+  platform
+  tenant
+}
+
+enum PermissionEffect {
+  grant
+  deny
+}
+
+model Permission {
+  id          String    @id @default(uuid()) @db.Uuid
+  code        String    @unique
+  module      String
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById String?   @map("created_by_id") @db.Uuid
+  updatedById String?   @map("updated_by_id") @db.Uuid
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById String?   @map("deleted_by_id") @db.Uuid
+  version     Int       @default(1)
+  metadata    Json?     @db.JsonB
+
+  rolePermissions     RolePermission[]
+  permissionOverrides UserPermissionOverride[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model Role {
+  id          String    @id @default(uuid()) @db.Uuid
+  scope       RoleScope
+  tenantId    String?   @map("tenant_id") @db.Uuid
+  code        String
+  name        String
+  isSystem    Boolean   @default(false) @map("is_system")
+  isTemplate  Boolean   @default(false) @map("is_template")
+  dataScope   DataScope @default(all) @map("data_scope")
+  moduleId    String?   @map("module_id")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById String?   @map("created_by_id") @db.Uuid
+  updatedById String?   @map("updated_by_id") @db.Uuid
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById String?   @map("deleted_by_id") @db.Uuid
+  version     Int       @default(1)
+  metadata    Json?     @db.JsonB
+
+  rolePermissions RolePermission[]
+  staffRoles      StaffRole[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([isTemplate])
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model StaffRole {
+  staffId   String    @map("staff_id") @db.Uuid
+  roleId    String    @map("role_id") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  role  Role  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([staffId, roleId])
+  @@map("staff_roles")
+}
+
+model UserPermissionOverride {
+  id           String           @id @default(uuid()) @db.Uuid
+  staffId      String           @map("staff_id") @db.Uuid
+  permissionId String           @map("permission_id") @db.Uuid
+  effect       PermissionEffect
+  reason       String?
+  expiresAt    DateTime?        @map("expires_at") @db.Timestamptz
+  createdById  String           @map("created_by_id") @db.Uuid
+  updatedById  String?          @map("updated_by_id") @db.Uuid
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime?        @map("deleted_at") @db.Timestamptz
+
+  staff      Staff      @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+
+  @@unique([staffId, permissionId])
+  @@map("user_permission_overrides")
+}
+
+// TASK-022 — GlobalCustomer (platform-level) + BotIdentity
+
+enum GlobalCustomerStatus {
+  active
+  suspended
+}
+
+enum Gender {
+  male
+  female
+  other
+  unspecified
+}
+
+enum PreferredContactChannel {
+  telegram
+  bale
+  sms
+  phone
+}
+
+enum BotPlatform {
+  telegram
+  bale
+}
+
+model GlobalCustomer {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  userId                  String                   @unique @map("user_id") @db.Uuid
+  name                    String?
+  email                   String?
+  nationalId              String?                  @map("national_id")
+  birthDate               DateTime?                @map("birth_date") @db.Date
+  gender                  Gender?                  @default(unspecified)
+  address                 String?
+  preferredContactChannel PreferredContactChannel? @map("preferred_contact_channel")
+  marketingOptIn          Boolean                  @default(false) @map("marketing_opt_in")
+  status                  GlobalCustomerStatus     @default(active)
+  pseudonymizedAt         DateTime?                @map("pseudonymized_at") @db.Timestamptz
+  createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  createdById             String?                  @map("created_by_id") @db.Uuid
+  updatedById             String?                  @map("updated_by_id") @db.Uuid
+  deletedAt               DateTime?                @map("deleted_at") @db.Timestamptz
+  deletedById             String?                  @map("deleted_by_id") @db.Uuid
+  deleteReason            String?                  @map("delete_reason")
+  version                 Int                      @default(1)
+  metadata                Json?                    @db.JsonB
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  botIdentities   BotIdentity[]
+  tenantCustomers TenantCustomer[]
+
+  @@index([status])
+  @@map("global_customers")
+}
+
+model BotIdentity {
+  id         String      @id @default(uuid()) @db.Uuid
+  customerId String      @map("customer_id") @db.Uuid
+  platform   BotPlatform
+  externalId String      @map("external_id")
+  linkedAt   DateTime    @default(now()) @map("linked_at") @db.Timestamptz
+  deletedAt  DateTime?   @map("deleted_at") @db.Timestamptz
+
+  customer GlobalCustomer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@unique([platform, externalId])
+  @@unique([customerId, platform])
+  @@map("bot_identities")
+}
+
+// TASK-023 — TenantCustomer (tenant ↔ global customer link)
+
+model TenantCustomer {
+  id                      String                   @id @default(uuid()) @db.Uuid
+  tenantId                String                   @map("tenant_id") @db.Uuid
+  globalCustomerId        String                   @map("global_customer_id") @db.Uuid
+  localCode               String?                  @map("local_code")
+  tags                    String[]                 @default([])
+  notes                   String?
+  internalNotes           String?                  @map("internal_notes")
+  defaultBranchId         String?                  @map("default_branch_id") @db.Uuid
+  creditScore             Int                      @default(100) @map("credit_score")
+  overdueCount            Int                      @default(0) @map("overdue_count")
+  totalPurchaseRial       BigInt                   @default(0) @map("total_purchase_rial")
+  lastPurchaseAt          DateTime?                @map("last_purchase_at") @db.Timestamptz
+  preferredContactChannel PreferredContactChannel? @map("preferred_contact_channel")
+  marketingOptIn          Boolean?                 @map("marketing_opt_in")
+  createdAt               DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  createdById             String?                  @map("created_by_id") @db.Uuid
+  updatedById             String?                  @map("updated_by_id") @db.Uuid
+  deletedAt               DateTime?                @map("deleted_at") @db.Timestamptz
+  deletedById             String?                  @map("deleted_by_id") @db.Uuid
+  deleteReason            String?                  @map("delete_reason")
+  version                 Int                      @default(1)
+  metadata                Json?                    @db.JsonB
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  globalCustomer GlobalCustomer @relation(fields: [globalCustomerId], references: [id], onDelete: Restrict)
+  defaultBranch  Branch?        @relation(fields: [defaultBranchId], references: [id], onDelete: SetNull)
+  sales          Sale[]
+
+  @@unique([tenantId, globalCustomerId])
+  @@index([tenantId])
+  @@index([tenantId, deletedAt])
+  @@index([tenantId, localCode])
+  @@index([tenantId, defaultBranchId])
+  @@map("tenant_customers")
+}
+
+// TASK-024 — AuditLog (append-only, no soft delete)
+
+enum ActorType {
+  staff
+  customer
+  system
+  platform
+}
+
+model AuditLog {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String?   @map("tenant_id") @db.Uuid
+  actorType  ActorType @map("actor_type")
+  actorId    String    @map("actor_id") @db.Uuid
+  action     String
+  entityType String    @map("entity_type")
+  entityId   String    @map("entity_id") @db.Uuid
+  oldValue   Json?     @map("old_value")
+  newValue   Json?     @map("new_value")
+  ip         String?
+  userAgent  String?   @map("user_agent")
+  metadata   Json?     @db.JsonB
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@index([action, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+// TASK-061 — Sale (installments aggregate root)
+
+enum SaleStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+
+  @@map("sale_status")
+}
+
+model Sale {
+  id               String     @id @default(uuid()) @db.Uuid
+  tenantId         String     @map("tenant_id") @db.Uuid
+  branchId         String     @map("branch_id") @db.Uuid
+  tenantCustomerId String     @map("tenant_customer_id") @db.Uuid
+  createdByStaffId String     @map("created_by_staff_id") @db.Uuid
+  title            String?
+  description      String?
+  invoiceNumber    String?    @map("invoice_number")
+  totalAmountRial  BigInt     @map("total_amount_rial")
+  downPaymentRial  BigInt     @default(0) @map("down_payment_rial")
+  discountRial     BigInt?    @map("discount_rial")
+  taxRial          BigInt?    @map("tax_rial")
+  installmentCount Int        @map("installment_count")
+  firstDueDate     DateTime   @map("first_due_date") @db.Timestamptz
+  intervalDays     Int        @default(30) @map("interval_days")
+  contractDate     DateTime   @map("contract_date") @db.Date
+  status           SaleStatus @default(ACTIVE)
+  cancelledAt      DateTime?  @map("cancelled_at") @db.Timestamptz
+  cancelledById    String?    @map("cancelled_by_id") @db.Uuid
+  cancelReason     String?    @map("cancel_reason")
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+  createdById      String?    @map("created_by_id") @db.Uuid
+  updatedById      String?    @map("updated_by_id") @db.Uuid
+  deletedAt        DateTime?  @map("deleted_at") @db.Timestamptz
+  deletedById      String?    @map("deleted_by_id") @db.Uuid
+  deleteReason     String?    @map("delete_reason")
+  version          Int        @default(1)
+  metadata         Json?      @db.JsonB
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch         Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  tenantCustomer TenantCustomer @relation(fields: [tenantCustomerId], references: [id], onDelete: Restrict)
+  createdByStaff Staff          @relation("SaleCreatedBy", fields: [createdByStaffId], references: [id], onDelete: Restrict)
+  cancelledBy    Staff?         @relation("SaleCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+  installments   Installment[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, branchId])
+  @@index([tenantId, tenantCustomerId])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, deletedAt])
+  @@map("sales")
+}
+
+// TASK-062 — Installment (append-only — no delete)
+
+enum InstallmentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  WAIVED
+
+  @@map("installment_status")
+}
+
+model Installment {
+  id                 String            @id @default(uuid()) @db.Uuid
+  saleId             String            @map("sale_id") @db.Uuid
+  tenantId           String            @map("tenant_id") @db.Uuid
+  sequenceNumber     Int               @map("sequence_number")
+  dueDate            DateTime          @map("due_date") @db.Timestamptz
+  amountRial         BigInt            @map("amount_rial")
+  status             InstallmentStatus @default(PENDING)
+  paidAt             DateTime?         @map("paid_at") @db.Timestamptz
+  confirmedByStaffId String?           @map("confirmed_by_staff_id") @db.Uuid
+  waivedByStaffId    String?           @map("waived_by_staff_id") @db.Uuid
+  waiveReason        String?           @map("waive_reason")
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+  createdById        String?           @map("created_by_id") @db.Uuid
+  updatedById        String?           @map("updated_by_id") @db.Uuid
+  deletedAt          DateTime?         @map("deleted_at") @db.Timestamptz
+  deletedById        String?           @map("deleted_by_id") @db.Uuid
+  deleteReason       String?           @map("delete_reason")
+  version            Int               @default(1)
+  metadata           Json?             @db.JsonB
+
+  sale             Sale    @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  tenant           Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  confirmedByStaff Staff?  @relation("InstallmentConfirmedBy", fields: [confirmedByStaffId], references: [id], onDelete: Restrict)
+  waivedByStaff    Staff?  @relation("InstallmentWaivedBy", fields: [waivedByStaffId], references: [id], onDelete: Restrict)
+  paymentAttempts  PaymentAttempt[]
+
+  @@unique([saleId, sequenceNumber])
+  @@index([tenantId, status, dueDate])
+  @@index([tenantId, saleId])
+  @@index([tenantId, deletedAt])
+  @@map("installments")
+}
+
+// TASK-063 — PaymentAttempt (report ≠ confirm — ADR-008)
+
+enum ReportedByType {
+  CUSTOMER
+  STAFF
+
+  @@map("reported_by_type")
+}
+
+enum PaymentAttemptStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+
+  @@map("payment_attempt_status")
+}
+
+model PaymentAttempt {
+  id                 String               @id @default(uuid()) @db.Uuid
+  installmentId      String               @map("installment_id") @db.Uuid
+  tenantId           String               @map("tenant_id") @db.Uuid
+  reportedByType     ReportedByType       @map("reported_by_type")
+  reportedById       String               @map("reported_by_id") @db.Uuid
+  amountRial         BigInt               @map("amount_rial")
+  status             PaymentAttemptStatus @default(PENDING)
+  evidenceFileId     String?              @map("evidence_file_id") @db.Uuid
+  note               String?
+  confirmedByStaffId String?              @map("confirmed_by_staff_id") @db.Uuid
+  rejectedReason     String?              @map("rejected_reason")
+  idempotencyKey     String?              @map("idempotency_key") @db.Uuid
+  confirmedAt        DateTime?            @map("confirmed_at") @db.Timestamptz
+  rejectedAt         DateTime?            @map("rejected_at") @db.Timestamptz
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+  createdById        String?              @map("created_by_id") @db.Uuid
+  updatedById        String?              @map("updated_by_id") @db.Uuid
+  deletedAt          DateTime?            @map("deleted_at") @db.Timestamptz
+  deletedById        String?              @map("deleted_by_id") @db.Uuid
+  deleteReason       String?              @map("delete_reason")
+  version            Int                  @default(1)
+  metadata           Json?                @db.JsonB
+
+  installment      Installment @relation(fields: [installmentId], references: [id], onDelete: Restrict)
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  confirmedByStaff Staff?      @relation("PaymentConfirmedBy", fields: [confirmedByStaffId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, installmentId, status])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, deletedAt])
+  @@map("payment_attempts")
+}
+
+// TASK-025 — TenantSetting, BranchSetting (module-scoped key-value)
+
+model TenantSetting {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  module       String
+  key          String
+  value        Json
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById  String?   @map("created_by_id") @db.Uuid
+  updatedById  String?   @map("updated_by_id") @db.Uuid
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById  String?   @map("deleted_by_id") @db.Uuid
+  deleteReason String?   @map("delete_reason")
+  version      Int       @default(1)
+  metadata     Json?     @db.JsonB
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, module, key])
+  @@index([tenantId, module])
+  @@index([tenantId, deletedAt])
+  @@map("tenant_settings")
+}
+
+model BranchSetting {
+  id           String    @id @default(uuid()) @db.Uuid
+  branchId     String    @map("branch_id") @db.Uuid
+  module       String
+  key          String
+  value        Json
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById  String?   @map("created_by_id") @db.Uuid
+  updatedById  String?   @map("updated_by_id") @db.Uuid
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById  String?   @map("deleted_by_id") @db.Uuid
+  deleteReason String?   @map("delete_reason")
+  version      Int       @default(1)
+  metadata     Json?     @db.JsonB
+
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@unique([branchId, module, key])
+  @@index([branchId, deletedAt])
+  @@map("branch_settings")
+}
+
+// TASK-026 — OutboxEvent (append-only, status transitions only)
+
+enum OutboxStatus {
+  pending
+  processing
+  processed
+  failed
+}
+
+model OutboxEvent {
+  id            String       @id @default(uuid()) @db.Uuid
+  tenantId      String?      @map("tenant_id") @db.Uuid
+  aggregateType String       @map("aggregate_type")
+  aggregateId   String       @map("aggregate_id") @db.Uuid
+  eventType     String       @map("event_type")
+  payload       Json
+  status        OutboxStatus @default(pending)
+  attempts      Int          @default(0)
+  lastError     String?      @map("last_error")
+  processedAt   DateTime?    @map("processed_at") @db.Timestamptz
+  metadata      Json?        @db.JsonB
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([status, createdAt])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("outbox_events")
+}
+
+// TASK-072 — API idempotency records (sale create, etc.)
+
+model IdempotencyRecord {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  key         String   @db.Uuid
+  requestHash String   @map("request_hash")
+  response    Json     @db.JsonB
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("idempotency_records")
+}
+
+// IFP-016 — Tenant API keys (machine integration)
+
+enum ApiKeyStatus {
+  active
+  revoked
+  expired
+}
+
+model TenantApiKey {
+  id           String       @id @default(uuid()) @db.Uuid
+  tenantId     String       @map("tenant_id") @db.Uuid
+  name         String       @db.VarChar(120)
+  keyPrefix    String       @map("key_prefix") @db.VarChar(16)
+  keyHash      String       @unique @map("key_hash") @db.VarChar(64)
+  scopes       String[]     @default([])
+  status       ApiKeyStatus @default(active)
+  expiresAt    DateTime?    @map("expires_at") @db.Timestamptz
+  lastUsedAt   DateTime?    @map("last_used_at") @db.Timestamptz
+  lastUsedIp   String?      @map("last_used_ip") @db.VarChar(45)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+  createdById  String       @map("created_by_id") @db.Uuid
+  updatedById  String?      @map("updated_by_id") @db.Uuid
+  deletedAt    DateTime?    @map("deleted_at") @db.Timestamptz
+  deletedById  String?      @map("deleted_by_id") @db.Uuid
+  deleteReason String?      @map("delete_reason")
+  version      Int          @default(1)
+  metadata     Json?        @db.JsonB
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([tenantId, name])
+  @@index([keyPrefix])
+  @@map("tenant_api_keys")
+}
+
+// IFP-TASK-024 — Staff saved list filters (per resource)
+
+model StaffSavedFilter {
+  id           String    @id @default(uuid()) @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById  String?   @map("created_by_id") @db.Uuid
+  updatedById  String?   @map("updated_by_id") @db.Uuid
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById  String?   @map("deleted_by_id") @db.Uuid
+  deleteReason String?   @map("delete_reason")
+  version      Int       @default(1)
+  metadata     Json?     @db.JsonB
+
+  tenantId    String  @map("tenant_id") @db.Uuid
+  staffId     String  @map("staff_id") @db.Uuid
+  resourceKey String  @map("resource_key") @db.VarChar(64)
+  name        String  @db.VarChar(120)
+  description String? @db.VarChar(500)
+  filterAst   Json    @map("filter_ast") @db.JsonB
+  isDefault   Boolean @default(false) @map("is_default")
+  visibility  String  @default("private") @db.VarChar(32)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  staff  Staff  @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  savedViews StaffSavedView[]
+
+  @@index([tenantId, staffId, resourceKey])
+  @@index([tenantId, resourceKey, visibility])
+  @@map("staff_saved_filters")
+}
+
+// IFP-TASK-027 — Staff saved list views (columns + sort + filter ref)
+
+model StaffSavedView {
+  id           String    @id @default(uuid()) @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById  String?   @map("created_by_id") @db.Uuid
+  updatedById  String?   @map("updated_by_id") @db.Uuid
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById  String?   @map("deleted_by_id") @db.Uuid
+  deleteReason String?   @map("delete_reason")
+  version      Int       @default(1)
+  metadata     Json?     @db.JsonB
+
+  tenantId      String  @map("tenant_id") @db.Uuid
+  staffId       String  @map("staff_id") @db.Uuid
+  resourceKey   String  @map("resource_key") @db.VarChar(64)
+  name          String  @db.VarChar(120)
+  description   String? @db.VarChar(500)
+  columnState   Json    @map("column_state") @db.JsonB
+  sortBy        String? @map("sort_by") @db.VarChar(64)
+  sortDir       String? @map("sort_dir") @db.VarChar(8)
+  search        String? @db.VarChar(200)
+  savedFilterId String? @map("saved_filter_id") @db.Uuid
+  isDefault     Boolean @default(false) @map("is_default")
+  visibility    String  @default("private") @db.VarChar(32)
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  staff       Staff             @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  savedFilter StaffSavedFilter? @relation(fields: [savedFilterId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, staffId, resourceKey])
+  @@map("staff_saved_views")
+}
