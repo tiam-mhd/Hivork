@@ -1,0 +1,26 @@
+# Epic-04 — فرانت‌اند تنظیمات فروشگاه
+
+## هدف Epic
+
+صفحات UI تنظیمات §۱۴ با فرم‌های حرفه‌ای و تب‌بندی.
+
+## Tasks
+
+| ID | فایل | عنوان | Depends | Priority |
+|----|------|--------|---------|----------|
+| IFP-170 | [IFP-TASK-170-frontend-store-settings-pages.md](./IFP-TASK-170-frontend-store-settings-pages.md) | Frontend — Store Settings Pages | IFP-168, IFP-002, IFP-172 | P0 |
+
+
+## Dependency داخلی Epic
+
+Tasks به ترتیب جدول برای Depends زنجیره‌ای داخل epic رعایت شده است.
+
+## Policy notes
+
+- Excellence forms + unsaved warning.
+- EXCELLENCE-STANDARDS · SOFT-DELETE-POLICY · ADR-004/005/013/015/017
+
+## مراجع
+
+- `docs/01-product/installment-module-features.md`
+- `docs/09-development/PHASE_EPIC_TASK_AUTHORING_RULES.md`

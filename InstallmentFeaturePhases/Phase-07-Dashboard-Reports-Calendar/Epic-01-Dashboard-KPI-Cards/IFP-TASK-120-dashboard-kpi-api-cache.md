@@ -1,0 +1,110 @@
+# IFP-TASK-120: API — Dashboard KPI + Redis Cache
+
+## Metadata
+
+| فیلد | مقدار |
+|------|--------|
+| Phase | 07 � Dashboard, Reports & Calendar |
+| Epic | Epic-01-Dashboard-KPI-Cards |
+| ID | IFP-TASK-120 |
+| Priority | P0 |
+| Depends on | IFP-TASK-119 |
+| Blocks | IFP-TASK-135 |
+| Estimated | 4h |
+
+---
+
+## هدف
+
+Endpoint staff برای KPIهای داشبورد با cache Redis (TTL 5 دقیقه) و invalidation پس از رویدادهای مالی.
+
+---
+
+## معیار پذیرش
+
+- [ ] `GET /api/v1/installments/dashboard/kpis`
+- [ ] `@RequirePermission('installments.dashboard.view')`
+- [ ] Cache key: `dashboard:kpis:{tenantId}:{scopeHash}` TTL 300s
+- [ ] Invalidate on payment.confirm, sale.create, sale.cancel
+- [ ] Integration test allow/deny RBAC
+
+---
+
+## مشخصات فنی
+
+### Endpoint
+
+```
+GET /api/v1/installments/dashboard/kpis
+Headers: Authorization, X-Branch-Id (optional)
+Response 200: DashboardKpisDto (Zod validated)
+```
+
+### Cache invalidation events
+
+- `PaymentConfirmed`, `SaleCreated`, `SaleCancelled`, `InstallmentStatusChanged`
+
+---
+
+## فایل‌ها
+
+| عمل | مسیر |
+|-----|------|
+| Create | `apps/api/src/modules/installments/dashboard/dashboard.controller.ts` |
+| Update | `packages/contracts/installments/dashboard.schema.ts` |
+
+---
+
+## مراحل پیاده‌سازی
+
+1. Controller + guard
+2. Redis cache wrapper
+3. Event listener invalidation
+4. Integration tests
+
+---
+
+## Edge Cases & Errors
+
+| سناریو | HTTP / Code | رفتار |
+|--------|-------------|--------|
+| Missing permission | 403 | FORBIDDEN |
+| Cache miss | 200 | compute + set cache |
+| Stale cache | 200 | TTL expiry refresh |
+
+---
+
+## تست
+
+- [ ] Integration: RBAC allow/deny
+- [ ] Integration: cache hit/miss
+
+---
+
+## Policy Alignment
+
+- [ ] ADR-016 API versioning
+- [ ] فیلتر `branchId` از `X-Branch-Id` + `@ApplyDataScope()` — ADR-015
+- [ ] RBAC installments.dashboard.view
+
+---
+
+## مراجع
+
+- `docs/02-architecture/rbac.md`
+- `docs/02-architecture/api-contracts.md`
+
+---
+
+## Self-Review Score
+
+> مبنا: `docs/09-development/PHASE_EPIC_TASK_AUTHORING_RULES.md` §10
+
+| محور | سقف | امتیاز | یادداشت |
+|------|-----|--------|---------|
+| Metadata (ID, Priority, Depends, Blocks, Estimate) | /10 | 10 | Complete |
+| Completeness (criteria, spec بدون TODO، files table) | /25 | 25 | Measurable AC |
+| Policy (EXCELLENCE §8، soft delete، ADR cited) | /25 | 25 | Policies cited |
+| Executability (edge cases، tests، dev بدون سؤال) | /25 | 24 | Edge cases + tests |
+| Alignment (sync docs، contracts، Epic README) | /15 | 14 | Epic sync |
+| **جمع** | **/100** | **98** | ≥95 required برای Ready |
