@@ -1,0 +1,53 @@
+{
+  "name": "@hivork/api",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@hivork/application": "workspace:*",
+    "@hivork/contracts": "workspace:*",
+    "@hivork/domain": "workspace:*",
+    "@hivork/infrastructure": "workspace:*",
+    "@hivork/module-core": "workspace:*",
+    "@hivork/module-installments": "workspace:*",
+    "@nestjs/common": "^10.4.20",
+    "@nestjs/config": "^3.3.0",
+    "@nestjs/core": "^10.4.20",
+    "@nestjs/platform-express": "^10.4.20",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "cookie-parser": "^1.4.7",
+    "ioredis": "^5.6.1",
+    "nestjs-pino": "^4.4.0",
+    "pg": "^8.16.0",
+    "pino": "^9.7.0",
+    "pino-http": "^10.5.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@hivork/config": "workspace:*",
+    "@nestjs/testing": "^10.4.20",
+    "@swc/core": "^1.15.43",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/express": "^5.0.3",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^22.15.32",
+    "@types/pg": "^8.15.4",
+    "exceljs": "^4.4.0",
+    "express": "^5.2.1",
+    "otplib": "^12.0.1",
+    "typescript": "^5.8.3",
+    "unplugin-swc": "^1.5.9",
+    "vitest": "^3.2.4"
+  }
+}
