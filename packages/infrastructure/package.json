@@ -1,0 +1,48 @@
+{
+  "name": "@hivork/infrastructure",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "prisma generate",
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@hivork/application": "workspace:*",
+    "@hivork/domain": "workspace:*",
+    "@hivork/module-core": "workspace:*",
+    "@nestjs/common": "^10.4.20",
+    "@nestjs/core": "^10.4.20",
+    "@prisma/client": "^6.19.3",
+    "argon2": "^0.44.0",
+    "ioredis": "^5.6.1",
+    "ipaddr.js": "^2.4.0",
+    "jsonwebtoken": "^9.0.2",
+    "otplib": "^12.0.1",
+    "puppeteer": "^24.14.0",
+    "qrcode": "^1.5.4",
+    "ua-parser-js": "^2.0.10"
+  },
+  "devDependencies": {
+    "@hivork/config": "workspace:*",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/qrcode": "^1.5.5",
+    "@types/ua-parser-js": "^0.7.39",
+    "exceljs": "^4.4.0",
+    "prisma": "^6.19.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "prisma": {
+    "schema": "../../prisma/schema.prisma"
+  }
+}

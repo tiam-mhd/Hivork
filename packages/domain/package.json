@@ -1,0 +1,44 @@
+{
+  "name": "@hivork/domain",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    },
+    "./errors": {
+      "types": "./dist/errors/domain.error.d.ts",
+      "default": "./dist/errors/domain.error.js"
+    },
+    "./events": {
+      "types": "./dist/events/domain-event.base.d.ts",
+      "default": "./dist/events/domain-event.base.js"
+    },
+    "./installments": {
+      "types": "./dist/installments/index.d.ts",
+      "default": "./dist/installments/index.js"
+    },
+    "./installments/browser": {
+      "types": "./dist/installments/browser.d.ts",
+      "default": "./dist/installments/browser.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "devDependencies": {
+    "@hivork/config": "workspace:*",
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

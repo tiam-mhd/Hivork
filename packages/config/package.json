@@ -1,0 +1,23 @@
+{
+  "name": "@hivork/config",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.nestjs.json": "./tsconfig.nestjs.json",
+    "./tsconfig.nextjs.json": "./tsconfig.nextjs.json",
+    "./eslint.base.js": "./eslint.base.js",
+    "./prettier.config.js": "./prettier.config.js",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src",
+    "test": "node -e \"console.log('@hivork/config: no tests yet')\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  }
+}

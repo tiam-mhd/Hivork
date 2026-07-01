@@ -1,0 +1,1 @@
+export const MAX_SAVED_VIEWS_PER_STAFF = 50;

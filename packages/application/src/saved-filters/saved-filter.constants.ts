@@ -1,0 +1,1 @@
+export const MAX_SAVED_FILTERS_PER_STAFF = 50;

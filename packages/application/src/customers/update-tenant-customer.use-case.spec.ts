@@ -1,0 +1,205 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { UpdateTenantCustomerUseCase } from './update-tenant-customer.use-case.js';
+
+describe('UpdateTenantCustomerUseCase', () => {
+  const tenantCustomers = {
+    findActiveById: vi.fn(),
+    findDeletedById: vi.fn(),
+    findDetailById: vi.fn(),
+    updateLink: vi.fn(),
+  };
+  const globalCustomers = { updateProfile: vi.fn() };
+  const branches = { existsActiveInTenant: vi.fn() };
+  const sales = {
+    hasSaleForTenantCustomerInBranches: vi.fn(),
+    hasSaleForTenantCustomerByStaff: vi.fn(),
+  };
+  const audit = { log: vi.fn() };
+
+  const useCase = new UpdateTenantCustomerUseCase(
+    tenantCustomers as never,
+    globalCustomers as never,
+    branches as never,
+    sales as never,
+    audit,
+  );
+
+  const staffContext = {
+    staffId: 'staff-1',
+    dataScope: 'all' as const,
+    assignedBranchIds: [],
+    activeBranchId: null,
+  };
+
+  const existing = {
+    id: 'tc-1',
+    tenantId: 'tenant-1',
+    globalCustomerId: 'global-1',
+    localCode: 'C-1',
+    notes: 'old',
+    defaultBranchId: null,
+    deletedAt: null,
+    deletedById: null,
+    deleteReason: null,
+    version: 2,
+  };
+
+  const detail = {
+    ...existing,
+    tags: ['vip'],
+    internalNotes: null,
+    preferredContactChannel: null,
+    marketingOptIn: null,
+    creditScore: 100,
+    overdueCount: 0,
+    totalPurchaseRial: 0n,
+    lastPurchaseAt: null,
+    createdAt: new Date('2026-01-01'),
+    createdById: 'staff-1',
+  };
+
+  const updatedDetail = {
+    ...detail,
+    notes: 'new note',
+    version: 3,
+  };
+
+  const baseInput = {
+    tenantId: 'tenant-1',
+    actorId: 'staff-1',
+    tenantCustomerId: 'tc-1',
+    version: 2,
+    staffContext,
+    canUpdateInternalNotes: true,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    tenantCustomers.findActiveById.mockResolvedValue(existing);
+    tenantCustomers.findDetailById.mockResolvedValue(detail);
+    tenantCustomers.updateLink.mockResolvedValue(updatedDetail);
+  });
+
+  it('updates allowed fields and audits customer.update', async () => {
+    const result = await useCase.execute({
+      ...baseInput,
+      notes: 'new note',
+      name: 'علی جدید',
+    });
+
+    expect(result.notes).toBe('new note');
+    expect(globalCustomers.updateProfile).toHaveBeenCalledWith(
+      'global-1',
+      expect.objectContaining({ name: 'علی جدید' }),
+    );
+    expect(tenantCustomers.updateLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'tc-1',
+        version: 2,
+        notes: 'new note',
+      }),
+    );
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'customer.update',
+        entityType: 'tenant_customer',
+        entityId: 'tc-1',
+      }),
+    );
+  });
+
+  it('rejects version mismatch with 409', async () => {
+    await expect(
+      useCase.execute({
+        ...baseInput,
+        version: 1,
+        notes: 'x',
+      }),
+    ).rejects.toMatchObject({
+      code: 'OPTIMISTIC_LOCK_CONFLICT',
+      httpStatus: 409,
+    });
+  });
+
+  it('rejects phone change', async () => {
+    await expect(
+      useCase.execute({
+        ...baseInput,
+        phone: '09129998877',
+        notes: 'x',
+      }),
+    ).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      httpStatus: 400,
+    });
+  });
+
+  it('rejects empty patch', async () => {
+    await expect(useCase.execute(baseInput)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      httpStatus: 400,
+    });
+  });
+
+  it('returns 404 for soft-deleted customer', async () => {
+    tenantCustomers.findActiveById.mockResolvedValue(null);
+    tenantCustomers.findDeletedById.mockResolvedValue(existing);
+
+    await expect(
+      useCase.execute({
+        ...baseInput,
+        notes: 'x',
+      }),
+    ).rejects.toMatchObject({
+      code: 'RECORD_DELETED',
+      httpStatus: 404,
+    });
+  });
+
+  it('denies internal notes without permission', async () => {
+    await expect(
+      useCase.execute({
+        ...baseInput,
+        canUpdateInternalNotes: false,
+        internalNotes: 'secret',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PERMISSION_DENIED',
+      httpStatus: 403,
+    });
+  });
+
+  it('returns 404 when branch scope denies access', async () => {
+    sales.hasSaleForTenantCustomerInBranches.mockResolvedValue(false);
+
+    await expect(
+      useCase.execute({
+        ...baseInput,
+        staffContext: {
+          staffId: 'staff-1',
+          dataScope: 'branch',
+          assignedBranchIds: ['branch-1'],
+          activeBranchId: null,
+        },
+        notes: 'x',
+      }),
+    ).rejects.toMatchObject({
+      code: 'CUSTOMER_NOT_FOUND',
+      httpStatus: 404,
+    });
+  });
+
+  it('dedupes tags through repository update', async () => {
+    await useCase.execute({
+      ...baseInput,
+      tags: ['vip', 'vip', 'new'],
+    });
+
+    expect(tenantCustomers.updateLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: ['vip', 'vip', 'new'],
+      }),
+    );
+  });
+});

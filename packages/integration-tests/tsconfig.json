@@ -1,0 +1,11 @@
+{
+  "extends": "@hivork/config/tsconfig.nestjs.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "paths": {
+      "@api/*": ["../../apps/api/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

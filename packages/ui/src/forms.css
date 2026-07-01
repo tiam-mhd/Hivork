@@ -1,0 +1,248 @@
+/* ── Hivork themed form controls (driven by @hivork/theme CSS variables) ── */
+
+.hivork-control {
+  appearance: none;
+  background-color: hsl(var(--form-control-bg));
+  color: hsl(var(--form-control-fg));
+  border: 1.5px solid hsl(var(--form-control-border));
+  border-radius: var(--radius-md, var(--radius));
+  box-shadow: var(--form-control-shadow);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.hivork-control::placeholder {
+  color: hsl(var(--form-control-placeholder));
+  opacity: 1;
+}
+
+.hivork-control:hover:not(:disabled):not(:read-only):not(:focus-visible) {
+  border-color: hsl(var(--form-control-border-hover));
+  box-shadow: var(--form-control-shadow-hover);
+}
+
+.hivork-control:focus-visible {
+  outline: none;
+  border-color: hsl(var(--form-control-border-focus));
+  box-shadow: var(--form-control-shadow-focus);
+}
+
+.hivork-control:disabled,
+.hivork-control:read-only {
+  background-color: hsl(var(--form-control-disabled-bg));
+  color: hsl(var(--form-control-disabled-fg));
+  opacity: 0.9;
+  cursor: not-allowed;
+}
+
+select.hivork-control {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 0.65rem center;
+  background-size: 1rem;
+  padding-inline-start: 0.75rem;
+  padding-inline-end: 2rem;
+}
+
+[dir='rtl'] select.hivork-control {
+  background-position: right 0.65rem center;
+}
+
+textarea.hivork-control {
+  min-height: 5.5rem;
+  resize: vertical;
+  padding-block: 0.65rem;
+}
+
+/* Native controls inside app shells */
+.layout-main :is(input, select, textarea):not(.hivork-control):not([type='checkbox']):not([type='radio']):not(
+    [type='hidden']
+  ):not([type='file']):not([type='submit']):not([type='button']):not([type='reset']),
+.app-shell-auth
+  :is(input, select, textarea):not(.hivork-control):not([type='checkbox']):not([type='radio']):not([type='hidden']):not(
+    [type='file']
+  ) {
+  appearance: none;
+  background-color: hsl(var(--form-control-bg));
+  color: hsl(var(--form-control-fg));
+  border: 1.5px solid hsl(var(--form-control-border));
+  border-radius: var(--radius-md, var(--radius));
+  box-shadow: var(--form-control-shadow);
+  min-height: 2.5rem;
+  padding-inline: 0.75rem;
+  font-family: inherit;
+  font-size: inherit;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.layout-main
+  :is(input, select, textarea):not(.hivork-control):not([type='checkbox']):not([type='radio']):not([type='hidden']):hover:not(
+    :disabled
+  ):not(:read-only):not(:focus-visible),
+.app-shell-auth
+  :is(input, select, textarea):not(.hivork-control):not([type='checkbox']):not([type='radio']):not([type='hidden']):hover:not(
+    :disabled
+  ):not(:focus-visible) {
+  border-color: hsl(var(--form-control-border-hover));
+  box-shadow: var(--form-control-shadow-hover);
+}
+
+.layout-main
+  :is(input, select, textarea):not(.hivork-control):not([type='checkbox']):not([type='radio']):not([type='hidden']):focus-visible,
+.app-shell-auth
+  :is(input, select, textarea):not(.hivork-control):not([type='checkbox']):not([type='radio']):not([type='hidden']):focus-visible {
+  outline: none;
+  border-color: hsl(var(--form-control-border-focus));
+  box-shadow: var(--form-control-shadow-focus);
+}
+
+/* Checkbox */
+.hivork-checkbox,
+.layout-main input[type='checkbox']:not(.hivork-switch-input),
+.app-shell-auth input[type='checkbox']:not(.hivork-switch-input) {
+  appearance: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  border: 1.5px solid hsl(var(--form-checkbox-border));
+  border-radius: calc(var(--radius-sm, 0.375rem) * 0.85);
+  background-color: hsl(var(--form-checkbox-bg));
+  box-shadow: var(--form-control-shadow);
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+  display: inline-grid;
+  place-content: center;
+}
+
+.hivork-checkbox:hover:not(:disabled),
+.layout-main input[type='checkbox']:not(.hivork-switch-input):hover:not(:disabled),
+.app-shell-auth input[type='checkbox']:not(.hivork-switch-input):hover:not(:disabled) {
+  border-color: hsl(var(--form-control-border-hover));
+  box-shadow: var(--form-control-shadow-hover);
+}
+
+.hivork-checkbox:focus-visible,
+.layout-main input[type='checkbox']:not(.hivork-switch-input):focus-visible,
+.app-shell-auth input[type='checkbox']:not(.hivork-switch-input):focus-visible {
+  outline: none;
+  border-color: hsl(var(--form-control-border-focus));
+  box-shadow: var(--form-control-shadow-focus);
+}
+
+.hivork-checkbox[data-state='checked'],
+.hivork-checkbox:checked,
+.layout-main input[type='checkbox']:not(.hivork-switch-input):checked,
+.app-shell-auth input[type='checkbox']:not(.hivork-switch-input):checked {
+  background-color: hsl(var(--form-checkbox-checked-bg));
+  border-color: hsl(var(--form-checkbox-checked-bg));
+  color: hsl(var(--form-checkbox-checked-fg));
+}
+
+.hivork-checkbox[data-state='checked']::after,
+.hivork-checkbox:checked::after,
+.layout-main input[type='checkbox']:not(.hivork-switch-input):checked::after,
+.app-shell-auth input[type='checkbox']:not(.hivork-switch-input):checked::after {
+  content: '';
+  width: 0.35rem;
+  height: 0.6rem;
+  border: 2px solid hsl(var(--form-checkbox-checked-fg));
+  border-top: 0;
+  border-inline-start: 0;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+.hivork-checkbox:disabled,
+.layout-main input[type='checkbox']:disabled,
+.app-shell-auth input[type='checkbox']:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Switch */
+.hivork-switch {
+  position: relative;
+  display: inline-flex;
+  height: 1.5rem;
+  width: 2.75rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  align-items: center;
+  border-radius: 9999px;
+  border: 1.5px solid transparent;
+  background-color: hsl(var(--form-switch-track));
+  box-shadow: var(--form-control-shadow);
+  transition:
+    background-color 0.25s ease,
+    box-shadow 0.2s ease;
+}
+
+.hivork-switch:hover:not([data-disabled]) {
+  box-shadow: var(--form-control-shadow-hover);
+}
+
+.hivork-switch:focus-visible {
+  outline: none;
+  box-shadow: var(--form-control-shadow-focus);
+}
+
+.hivork-switch[data-state='checked'] {
+  background-color: hsl(var(--form-switch-track-checked));
+}
+
+.hivork-switch[data-disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.hivork-switch-thumb {
+  pointer-events: none;
+  display: block;
+  height: 1.125rem;
+  width: 1.125rem;
+  border-radius: 9999px;
+  background-color: hsl(var(--form-switch-thumb));
+  box-shadow: 0 1px 3px hsl(0 0% 0% / 0.2);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(0.15rem);
+}
+
+[dir='rtl'] .hivork-switch-thumb {
+  transform: translateX(-0.15rem);
+}
+
+.hivork-switch[data-state='checked'] .hivork-switch-thumb {
+  transform: translateX(1.35rem);
+}
+
+[dir='rtl'] .hivork-switch[data-state='checked'] .hivork-switch-thumb {
+  transform: translateX(-1.35rem);
+}
+
+/* Glass theme — frosted controls */
+[data-theme-surface-style='glass'] .hivork-control,
+[data-theme-surface-style='glass']
+  .layout-main
+  :is(input, select, textarea):not([type='checkbox']):not([type='radio']):not([type='hidden']) {
+  background-color: hsl(var(--form-control-bg) / 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-theme-surface-style='glass'] .hivork-checkbox,
+[data-theme-surface-style='glass'] .layout-main input[type='checkbox']:not(.hivork-switch-input) {
+  background-color: hsl(var(--form-checkbox-bg) / 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
