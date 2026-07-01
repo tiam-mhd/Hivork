@@ -1,0 +1,51 @@
+{
+  "name": "hivork",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "clean": "turbo clean && rimraf node_modules",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "docker:ps": "docker compose -f docker/docker-compose.yml ps",
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f",
+    "db:validate": "node scripts/ci/prisma-validate.mjs",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "ci:hard-delete-check": "node scripts/ci/hard-delete-check.mjs",
+    "ci:rtl-class-check": "node scripts/check-rtl-classes.mjs",
+    "test:phase-01-auth": "pnpm --filter @hivork/integration-tests test:phase-01-auth && pnpm --filter @hivork/web exec playwright test phase-01-auth"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "devDependencies": {
+    "@eslint/js": "^9.28.0",
+    "argon2": "^0.44.0",
+    "eslint": "^9.28.0",
+    "eslint-plugin-import": "^2.31.0",
+    "globals": "^16.2.0",
+    "prettier": "^3.5.3",
+    "prisma": "^6.9.0",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.19.4",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.0"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}

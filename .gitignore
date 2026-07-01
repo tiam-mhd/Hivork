@@ -1,0 +1,74 @@
+# ── Dependencies ──────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+
+# ── Environment & secrets ─────────────────────────────────────
+.env
+.env.*
+!.env.example
+!**/.env.example
+!.env.local.example
+*.pem
+*.key
+credentials.json
+secrets/
+
+# ── Build outputs ─────────────────────────────────────────────
+dist/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# ── Turborepo ─────────────────────────────────────────────────
+.turbo/
+
+# ── Logs ──────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── OS / IDE ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+
+# ── Test & coverage ───────────────────────────────────────────
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# ── Prisma (local SQLite only — not migrations) ───────────────
+prisma/*.db
+prisma/*.db-journal
+
+# ── Docker (local overrides) ──────────────────────────────────
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ── Deployment platforms ──────────────────────────────────────
+.vercel/
+.netlify/
+
+# ── Misc caches & temp ────────────────────────────────────────
+*.local
+.cache/
+tmp/
+temp/
+.eslintcache
+.stylelintcache
+
+# ── Puppeteer / PDF export (downloaded browsers) ──────────────
+.puppeteer/
+
+# NOTE: Markdown (*.md) files are intentionally tracked — docs are part of the repo.
