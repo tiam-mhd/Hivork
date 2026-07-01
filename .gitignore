@@ -60,6 +60,14 @@ docker-compose.local.yml
 .vercel/
 .netlify/
 
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+.venv/
+venv/
+
 # ── Misc caches & temp ────────────────────────────────────────
 *.local
 .cache/

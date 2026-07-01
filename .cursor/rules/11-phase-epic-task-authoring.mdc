@@ -1,0 +1,47 @@
+---
+description: قوانین Phase/Epic/Task — یک task یک فایل، ≥95
+globs: Phases/**/*
+alwaysApply: false
+---
+
+# Phase / Epic / Task Authoring
+
+**Before creating phases/tasks:** read `docs/09-development/PHASE_EPIC_TASK_AUTHORING_RULES.md`
+
+## Structure (mandatory)
+
+```
+Phases/Phase-N-Name/Epic-NN-Name/TASK-NNN-kebab-slug.md
+```
+
+- **One task = one `.md` file**
+- **Epic README required** — task index + depends
+- **Phase README required** — execution order
+
+## Every task must have
+
+Metadata (Priority, Depends, Blocks) · Acceptance criteria · Full tech spec · Files · Steps · Edge cases · Tests · Policy alignment · References
+
+## Prisma tasks
+
+Include ALL base fields + EXCELLENCE §8 entity fields + soft delete. `onDelete: Restrict` — never Cascade hard delete.
+
+## Flow/auth tasks
+
+Document all actors + order (no register/verify contradiction). Mermaid/ascii flow.
+
+## Missing task types (check each phase)
+
+Soft delete/restore · Onboarding flow · CI hard-delete grep · Seed role clone · Module skeleton · Vertical slice E2E
+
+## Template
+
+Copy from `docs/09-development/TASK-TEMPLATE.md`
+
+## Review gate
+
+Task self-score ≥ **95/100** — PHASE_EPIC_TASK_AUTHORING_RULES §10
+
+## Full rules
+
+`docs/09-development/PHASE_EPIC_TASK_AUTHORING_RULES.md`

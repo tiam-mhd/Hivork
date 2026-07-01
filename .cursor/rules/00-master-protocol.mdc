@@ -1,0 +1,53 @@
+---
+description: پروتکل اجباری قبل از هر توسعه — Hivork
+alwaysApply: true
+---
+
+# Hivork — Master Development Protocol
+
+## قبل از نوشتن هر خط کد
+
+1. `AGENTS.md` و `docs/README.md`
+2. سند مرتبط در `docs/` (architecture, domain, ADR)
+3. `docs/09-development/DEVELOPMENT_RULES.md`
+4. `docs/09-development/EXCELLENCE-STANDARDS.md`
+5. `docs/09-development/SOFT-DELETE-POLICY.md`
+6. تأیید: task داخل scope است؟ ADR نقض نمی‌شود؟
+
+## Stack ثابت (بدون ADR جدید تغییر نده)
+
+`pnpm` + Turborepo · NestJS · Next.js · Prisma · PostgreSQL · Redis · BullMQ · Zod · TS strict
+
+## معماری
+
+- **Modular Monolith** — apps: `api`, `web`, `bot-gateway`, `scheduler`
+- **Clean Architecture:** Presentation → Application → Domain ← Infrastructure
+- **Business logic فقط در** `packages/domain/` و `packages/application/`
+- Bot/Web/Controller = thin client
+
+## ممنوعیت‌های مطلق
+
+- Logic مالی در Controller / Bot / React component
+- Query tenant-scoped بدون `tenant_id`
+- `number`/`float` برای پول — فقط `bigint` ریال
+- Hard delete on **any** business data — soft delete only (ADR-013)
+- `prisma.*.delete()` on business models
+- Permission فقط در UI
+- `prisma db push` در prod/staging
+- Microservice / GraphQL / MongoDB
+- Feature خارج از task و docs (scope creep)
+- Import مستقیم domain ماژول A در ماژول B
+- Happy-path-only UI / bare-minimum schema (see EXCELLENCE-STANDARDS)
+
+## بعد از اتمام task
+
+- [ ] `EXCELLENCE-STANDARDS.md` §9 checklist
+- [ ] Test (domain → unit؛ use case → integration)
+- [ ] `packages/contracts` Zod اگر API تغییر کرد
+- [ ] Permission guard + audit اگر endpoint حساس
+- [ ] `docs/` + ADR اگر رفتار/معماری عوض شد
+
+## مرجع کامل
+
+`docs/09-development/DEVELOPMENT_RULES.md`  
+`docs/09-development/EXCELLENCE-STANDARDS.md` — **اجباری برای DB / Form / Page / Flow**

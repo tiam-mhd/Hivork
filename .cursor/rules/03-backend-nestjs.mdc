@@ -1,0 +1,55 @@
+---
+description: Backend NestJS — use cases، API، bot، jobs
+globs: apps/api/**,apps/bot-gateway/**,apps/scheduler/**,modules/**,packages/application/**,packages/infrastructure/**
+alwaysApply: false
+---
+
+# Backend Rules (NestJS)
+
+## Controller / Handler = Thin
+
+```typescript
+// ✅
+return this.createSaleUseCase.execute({ ...dto, tenantId: staff.tenantId });
+
+// ❌ business logic, Prisma calls, amount calculation in controller
+```
+
+Bot handlers و scheduled jobs → **same use cases** as REST
+
+## API
+
+- Prefix: `/api/v1/`
+- Cursor pagination (not offset)
+- POST مالی: `Idempotency-Key` header support
+- Errors: `{ code, message, details? }` — no stack to client
+
+## Domain Errors
+
+```typescript
+throw new DomainError('INSTALLMENT_ALREADY_PAID');
+// Map in exception filter — not raw Error strings
+```
+
+## Notifications
+
+- Idempotency: `(installment_id, reminder_type, channel)` unique
+- BullMQ delayed jobs — not naive cron-only
+- Webhook bots — not polling in production
+
+## Repository
+
+- Always apply tenant filter + data scope
+- Transactions for use cases touching multiple aggregates
+- Outbox in same transaction as domain write
+
+## ❌ Forbidden
+
+- `any` without documented reason
+- Empty catch blocks
+- Direct Prisma in `apps/bot-gateway` bypassing use cases
+- Duplicate business logic between api and bot-gateway
+
+## Docs
+
+`docs/04-technology/tech-stack.md` · `docs/05-channels/notifications.md`

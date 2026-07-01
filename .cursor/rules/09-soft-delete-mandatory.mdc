@@ -1,0 +1,40 @@
+---
+description: Soft Delete اجباری — بدون hard delete، قابل بازیابی
+alwaysApply: true
+---
+
+# Soft Delete — Mandatory (No Exceptions)
+
+Read: `docs/09-development/SOFT-DELETE-POLICY.md`
+
+## Absolute rules
+
+- ❌ `prisma.*.delete()` / `deleteMany()` on business data — **FORBIDDEN**
+- ✅ Soft delete only: `deletedAt`, `deletedById`, optional `deleteReason`
+- ✅ Default queries: `deletedAt: null` — Prisma extension required
+- ✅ Restore API for platform admin / tenant owner
+- ✅ Audit log on soft delete + restore
+
+## User visibility
+
+Deleted data **invisible** to normal users — exists in DB for recovery.
+
+## Exceptions (ephemeral only)
+
+OTP Redis, rate limits, JWT TTL — not business entities.
+
+## Never delete
+
+AuditLog, OutboxEvent — append-only forever.
+
+## Privacy (customer erasure)
+
+Soft delete + pseudonymize — **not** hard delete. Financial records retained.
+
+## CI
+
+Reject PRs with Prisma `.delete(` on business models.
+
+## Full policy
+
+`docs/09-development/SOFT-DELETE-POLICY.md`

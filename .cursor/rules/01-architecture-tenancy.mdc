@@ -1,0 +1,63 @@
+---
+description: معماری، Multi-Tenancy، ماژولار — Hivork
+alwaysApply: true
+---
+
+# Architecture & Tenancy
+
+## موجودیت‌ها (ADR-002, ADR-017 — نقض ممنوع)
+
+```
+Platform → Tenant → Branch, Staff, TenantCustomer
+User (platform identity, phone unique)
+ ├── Staff[] (per tenant — B2B)
+ └── GlobalCustomer? (B2C profile)
+         └── TenantCustomer (junction — NOT direct to User)
+```
+
+- Customer **زیر Branch نیست**
+- `phone` فقط روی **User** — Staff/GlobalCustomer از join
+- Staff و Customer می‌توانند same User/phone — session جدا
+- یک User می‌تواند Staff در چند tenant باشد
+
+## Module System
+
+- `modules/core/` — همیشه فعال (tenant, rbac, auth, audit, settings)
+- `modules/installments/` — ماژول ۱
+- هر endpoint ماژولی: `@RequireModule('installments')` + plan entitlement
+
+## قرارگیری کد
+
+| نوع | مسیر |
+|-----|------|
+| Entity / Rule | `packages/domain/{module}/` |
+| Use Case | `packages/application/{module}/` |
+| Repository | `packages/infrastructure/persistence/` |
+| Zod DTO | `packages/contracts/{module}/` |
+
+## Multi-Tenant
+
+```typescript
+// ✅ EVERY tenant-scoped query
+where: { tenantId: ctx.tenantId, ... }
+
+// ❌ NEVER trust client tenant_id without JWT verification
+```
+
+- Repository layer + middleware — defense in depth
+- Integration test: cross-tenant **must fail**
+
+## Events
+
+- Side effects → Domain Event → Outbox → Worker
+- Handlers idempotent
+- ماژول‌ها via event — not direct entity import
+
+## Settings vs Invariants
+
+- **Settings:** schema keys only (`settings.schema.ts`)
+- **Invariants:** domain code (paid never deleted, status transitions)
+
+## Docs
+
+`docs/02-architecture/overview.md` · `tenancy-and-entities.md` · `modules.md`

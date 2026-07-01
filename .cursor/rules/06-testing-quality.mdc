@@ -1,0 +1,51 @@
+---
+description: Testing، quality، git — Definition of Done
+alwaysApply: true
+---
+
+# Testing & Quality
+
+## Definition of Done (every task)
+
+| Change | Required |
+|--------|----------|
+| Domain rule | Unit test (Vitest) |
+| Use case | Integration test (PG via Testcontainers) |
+| New permission endpoint | RBAC test (allow + deny + cross-tenant fail) |
+| Payment flow | API E2E test |
+| Bug fix (financial) | Regression test **before** fix |
+
+## Golden Rule
+
+> Financial bug → write failing test first → then fix
+
+## TypeScript
+
+- `strict: true`
+- No `any` (use `unknown` + narrow)
+- Shared types: `packages/contracts` only
+
+## Git / PR
+
+- One concern per PR — no drive-by refactor
+- Format: `type(scope): description` — e.g. `feat(installments): add create sale`
+- Update `.env.example` for new env vars
+- ❌ secrets in git
+
+## Logging
+
+Structured JSON — `{ tenantId, event, entityId }`  
+❌ `console.log` in production code paths
+
+## Before Merge Checklist
+
+- [ ] `EXCELLENCE-STANDARDS.md` §9 (DB / backend / UI as applicable)
+- [ ] lint + typecheck pass
+- [ ] relevant tests pass
+- [ ] no `tenant_id` query missing filter
+- [ ] contracts updated if API changed
+- [ ] docs/ADR if behavior/architecture changed
+
+## Docs
+
+`docs/06-operations/testing-observability.md` · `docs/09-development/DEVELOPMENT_RULES.md`

@@ -1,0 +1,44 @@
+---
+description: استاندارد کمال حرفه‌ای — DB، فرم، فلو، صفحه، backend
+alwaysApply: true
+---
+
+# Excellence — Enterprise-Grade Completeness
+
+**Hivork = professional product.** Not minimal MVP fields/UI/flows.
+
+Before ANY table, form, flow, page, or backend logic → read:
+`docs/09-development/EXCELLENCE-STANDARDS.md`
+
+## Database (every table)
+
+Base fields: `id`, `createdAt`, `updatedAt`, `createdById`, `updatedById`, `deletedAt`, `deletedById`, `version` (financial), `metadata` JSON  
+Tenant tables: `tenantId` + indexes on FKs and `(tenantId, status)`  
+Soft delete only — no hard delete — `SOFT-DELETE-POLICY.md`
+
+## Backend (every use case)
+
+Permission + module + data scope + audit + validation + edge cases (409 duplicate, version conflict, plan limits)  
+List APIs: cursor pagination, sort, filter, search
+
+## Forms (every form)
+
+Label, placeholder, help, fa validation, loading, server errors, unsaved warning, a11y, RTL, mobile input types
+
+## Pages (every page)
+
+Breadcrumb, title, actions, filters, skeleton/empty/error states, no permission state
+
+## Flows (every flow)
+
+Document: entry, steps, errors, exit, recovery. Multi-step = progress + back + summary
+
+## Rule
+
+If a field/state/UX path is reasonable for pro users → **include it** unless documented out of scope.
+
+Do NOT ship happy-path-only UI or bare-minimum schemas.
+
+## Full reference
+
+`docs/09-development/EXCELLENCE-STANDARDS.md`

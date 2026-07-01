@@ -1,0 +1,41 @@
+---
+description: Contracts — Zod schemas مشترک API و Frontend
+globs: packages/contracts/**
+alwaysApply: false
+---
+
+# API Contracts (Zod)
+
+## Single Source of Truth
+
+All request/response shapes live in `packages/contracts/`  
+Both `apps/api` and `apps/web` import from here — **no duplicate DTOs**
+
+## Pattern
+
+```typescript
+export const CreateSaleSchema = z.object({
+  tenantCustomerId: z.string().uuid(),
+  totalAmountRial: z.string().regex(/^\d+$/), // bigint as string in JSON
+  downPaymentRial: z.string().regex(/^\d+$/),
+  installmentCount: z.number().int().min(1).max(120),
+  firstDueDate: z.string().datetime(),
+});
+
+export type CreateSaleDto = z.infer<typeof CreateSaleSchema>;
+```
+
+## Rules
+
+- Validate at API boundary with same schema frontend uses
+- Money fields: string digits or bigint — document serialization
+- Phone: normalize to `09xxxxxxxxx` via shared helper in contracts
+- Version breaking change → `/api/v2` + ADR
+
+## OpenAPI
+
+Generate from NestJS + keep in sync with Zod (shared types where possible)
+
+## Docs
+
+`docs/04-technology/monorepo-structure.md` · `docs/07-roadmap/development-roadmap.md` (API list)

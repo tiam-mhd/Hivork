@@ -1,0 +1,33 @@
+---
+description: قوانین نگارش مستندات docs/ — امتیاز ≥95
+globs: docs/**,AGENTS.md,Phases/**/README.md
+alwaysApply: false
+---
+
+# Documentation Authoring
+
+**Before creating/editing docs:** read `docs/09-development/DOCUMENTATION_AUTHORING_RULES.md`
+
+## Must
+
+- Link new doc in `docs/README.md` (once, no duplicates)
+- Align entity fields with EXCELLENCE §8 + SOFT-DELETE-POLICY + related Tasks
+- ADR for architecture decisions — before implementation docs
+- Header: status, version, related ADRs
+- Error paths + edge cases — not happy-path only
+
+## Soft delete in docs
+
+All business entities: base fields + soft delete. Exceptions explicit (AuditLog, Outbox, Redis TTL).
+
+## Sync
+
+Doc change → update matching `Phases/.../TASK-*.md` if affected
+
+## Review gate
+
+Self-score ≥ **95/100** using rubric in DOCUMENTATION_AUTHORING_RULES §9 before Approved
+
+## Full rules
+
+`docs/09-development/DOCUMENTATION_AUTHORING_RULES.md`

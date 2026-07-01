@@ -1,0 +1,73 @@
+---
+description: Code Review و Branching Strategy — هر PR، هر commit، هر review
+globs: **/*.ts,**/*.tsx,**/*.prisma,Phases/**/*
+alwaysApply: false
+---
+
+# Code Review & Branching
+
+**Before opening or reviewing any PR:** read `docs/09-development/CODE-REVIEW-GUIDE.md` + `docs/09-development/BRANCHING-STRATEGY.md`
+
+## Branch Naming
+
+```
+{type}/{scope}-{short-description}
+feature/installments-waive-api
+fix/installment-overdue-timezone
+hotfix/payment-confirm-race
+```
+
+Types: `feature` · `fix` · `chore` · `docs` · `refactor` · `test` · `hotfix`
+
+## Commit Format (Conventional Commits)
+
+```
+{type}({scope}): {description}
+feat(installments): add waive use case with audit
+fix(rbac): deny override not overriding role grant
+```
+
+## PR Author — Automatic Blocks (must fix before request review)
+
+```
+❌ prisma.*.delete() on any business entity
+❌ number/float for financial amounts — bigint Rial only
+❌ tenantId from request body — JWT only
+❌ Business logic in Controller / Bot Handler / React component
+❌ Missing permission guard on staff endpoint
+❌ console.log in production code paths
+❌ Secrets or credentials committed
+❌ Missing regression test for financial bug fix
+❌ ADR missing for new architecture decision
+```
+
+## PR Size Limits
+
+| Type | Max Lines |
+|------|-----------|
+| Feature | 500 |
+| Bug fix | 200 |
+| Refactor | 300 |
+| Migration | 150 |
+
+**One concern per PR** — no drive-by refactoring.
+
+## Hotfix
+
+```
+1. Branch from main — git checkout -b hotfix/xxx
+2. Write regression test FIRST (financial bugs)
+3. Fix + commit
+4. PR → 1 approval (expedited)
+5. Post-review within 24h
+```
+
+## Merge Strategy
+
+- **Squash and merge** — one clean commit per PR on `main`
+- **Rebase** onto `main` before opening PR — not merge
+- Delete branch after merge
+
+## Full Guides
+
+`docs/09-development/CODE-REVIEW-GUIDE.md` · `docs/09-development/BRANCHING-STRATEGY.md`

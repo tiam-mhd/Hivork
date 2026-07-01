@@ -1,0 +1,60 @@
+---
+description: Frontend Next.js — seller panel، customer portal
+globs: apps/web/**,packages/ui/**
+alwaysApply: false
+---
+
+# Frontend Rules (Next.js)
+
+## Route Zones
+
+| Zone | Path | Actor |
+|------|------|-------|
+| Seller | `app/(seller)/admin/` | Staff |
+| Customer | `app/(customer)/my/` | GlobalCustomer |
+| Marketing | `app/(marketing)/` | Public |
+
+## Stack
+
+- TanStack Query — server state
+- React Hook Form + Zod — forms (schemas from `packages/contracts`)
+- shadcn/ui + Tailwind — RTL-first, fa-IR primary
+
+## Forms & Pages
+
+Read `EXCELLENCE-STANDARDS.md` §5–7 before any form or page — all states required
+
+## Rules
+
+```typescript
+// ✅ fetch via typed API client + TanStack Query
+// ❌ amount calculation in JSX
+// ❌ permission check only in UI — backend always enforces
+// ❌ duplicate Zod schema — import from packages/contracts
+```
+
+## UI Permission
+
+Hide menu/button if no permission — **but** this is UX only, not security
+
+## Money Display
+
+```typescript
+// API returns amountRial as string/bigint
+const toman = BigInt(amountRial) / 10n;
+// Use locale formatter from packages/i18n
+```
+
+## Jalali
+
+All user-facing dates: Jalali + Tehran timezone  
+Use shared formatter — not ad-hoc in each page
+
+## PWA (Customer)
+
+- mobile-first for `(customer)/my/*`
+- desktop-first acceptable for `(seller)/admin/*`
+
+## Docs
+
+`docs/05-channels/channels-strategy.md` · `docs/04-technology/monorepo-structure.md`

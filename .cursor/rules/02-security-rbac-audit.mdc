@@ -1,0 +1,64 @@
+---
+description: RBAC، امنیت، Audit — Hivork
+alwaysApply: true
+---
+
+# Security, RBAC & Audit
+
+## هر Endpoint جدید (Staff)
+
+```typescript
+@RequireAuth()
+@RequireModule('installments')           // if module-scoped
+@RequirePermission('installments.sale.create')
+@ApplyDataScope()                        // all | branch | own
+```
+
+**Active branch (staff):** `X-Branch-Id` header or Redis session — must pass `canAccessBranch()` (ADR-015).  
+JWT carries `tenantId` only — not `branchId`.
+
+`{module}.{resource}.{action}` — e.g. `installments.payment.confirm`  
+❌ vague `manage` alone
+
+## Override precedence
+
+```
+DENY (user) > GRANT (user) > Role permissions > default DENY
+```
+
+User override = exception only — not full permission copy
+
+## Actors (جدا — IDOR risk)
+
+| Actor | Claim |
+|-------|-------|
+| Staff | `actor: staff`, `tenant_id` |
+| Customer | `actor: customer` |
+| Platform | `actor: platform` |
+
+- Separate cookies: `hivork_staff` / `hivork_customer`
+- Customer endpoints: only own data (`global_customer_id` from token)
+
+## Audit اجباری
+
+`sale.create|cancel` · `installment.waive` · `payment.confirm|reject` · `staff.*` · `role.*` · `settings.change` · `customer.import`
+
+```typescript
+AuditLog { actor, action, entity, old_value, new_value, tenant_id, ip }
+// Immutable — no update/delete
+```
+
+## Auth
+
+- Phone OTP — normalize `09xxxxxxxxx`
+- Access 15min · Refresh httpOnly 30d
+- Rate limit OTP: 3/min per phone
+
+## Logging
+
+- Structured (Pino) — `{ tenantId, event, entityId }`
+- ❌ PII in log messages (phone, name in plain text)
+
+## Docs
+
+`docs/02-architecture/rbac.md` · `docs/06-operations/security-and-audit.md`

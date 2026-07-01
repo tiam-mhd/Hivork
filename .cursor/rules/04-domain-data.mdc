@@ -1,0 +1,69 @@
+---
+description: Domain layer — pure TS، money، state machines
+globs: packages/domain/**,prisma/**
+alwaysApply: false
+---
+
+# Domain & Data Layer
+
+## Domain Purity
+
+`packages/domain/` — **zero imports** from NestJS, Prisma, HTTP, Redis
+
+```typescript
+// ✅ domain entity method
+markAsPaid(confirmedBy: StaffId, at: DateTime): void {
+  if (this.status === 'paid') throw new DomainError('ALREADY_PAID');
+  this.status = 'paid';
+  this.raise(new PaymentConfirmedEvent(this.id));
+}
+```
+
+## Money
+
+```typescript
+amountRial: bigint   // ✅ DB, domain, internal API
+amount: number       // ❌ NEVER for money
+```
+
+Display Toman in UI only — divide by `10n`
+
+## Dates
+
+- Store: `timestamptz` UTC
+- Business: `Asia/Tehran`
+- Overdue: Tehran date boundary — not UTC midnight mistake
+
+## State Transitions
+
+Before changing status → read `docs/03-modules/installments/state-machines.md`  
+Transitions **only** in entity methods — not in use case if/else chains scattered
+
+## Prisma / Migrations
+
+- `prisma migrate dev` (local) · `migrate deploy` (prod)
+- ❌ `db push` in staging/production
+- Table names: `snake_case` plural
+- Financial columns: `BIGINT` for rial
+- Branch-scoped business rows: `branch_id NOT NULL` + `@@index([tenantId, branchId])` (ADR-015)
+- Staff: `assigned_branch_ids[]` + optional `primary_branch_id` — not single `branch_id` FK
+
+## Deletes (ADR-013 — mandatory)
+
+Read: `docs/09-development/SOFT-DELETE-POLICY.md`
+
+- **ALL business entities:** soft delete (`deletedAt`, `deletedById`)
+- `prisma.*.delete()` — **FORBIDDEN** on business models
+- Default reads: `deletedAt: null` via Prisma extension
+- Installment `paid` / `waived`: **no delete** — status terminal only
+- Customer privacy: soft delete + pseudonymize — not SQL DELETE
+- AuditLog / OutboxEvent: append-only — never deleted
+
+## Payment Flow (ADR-008)
+
+Customer report → `PaymentAttempt.pending` → staff confirm → `Installment.paid`  
+Never auto-paid on customer report (unless explicit setting + documented)
+
+## Docs
+
+`docs/03-modules/installments/domain.md` · `state-machines.md`
