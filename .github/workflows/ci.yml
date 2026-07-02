@@ -80,6 +80,17 @@ jobs:
       - name: Test
         run: pnpm turbo test
 
+      - name: Prisma migrate + seed (Phase 03 integration)
+        run: |
+          pnpm db:migrate:deploy
+          pnpm db:seed
+
+      - name: Phase 03 customer integration tests (IFP-054)
+        run: pnpm --filter @hivork/api exec vitest run test/integration/customers
+
+      - name: Phase 04 contract enterprise integration tests (IFP-078)
+        run: pnpm --filter @hivork/api exec vitest run test/integration/phase04-contract-enterprise.spec.ts
+
       - name: Build
         run: pnpm turbo build
 
@@ -170,3 +181,6 @@ jobs:
 
       - name: Phase 01 Playwright E2E
         run: pnpm --filter @hivork/web exec playwright test phase-01-auth
+
+      - name: Phase 04 Playwright smoke
+        run: pnpm --filter @hivork/web exec playwright test phase04-contract-e2e

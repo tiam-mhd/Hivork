@@ -79,4 +79,7 @@ temp/
 # ── Puppeteer / PDF export (downloaded browsers) ──────────────
 .puppeteer/
 
+# ── Local file storage (IFP-TASK-043) ───────────────────────
+data/file-storage/
+
 # NOTE: Markdown (*.md) files are intentionally tracked — docs are part of the repo.
