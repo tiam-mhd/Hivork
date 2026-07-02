@@ -85,4 +85,55 @@ describe('TenantCustomer', () => {
       expect.objectContaining({ code: 'TOO_MANY_TAGS' }),
     );
   });
+
+  it('archives and unarchives customer', () => {
+    const customer = TenantCustomer.link('tenant-1', 'global-1');
+
+    customer.archive('staff-1');
+    expect(customer.isArchived).toBe(true);
+    expect(customer.status).toBe('archived');
+    expect(customer.archivedById).toBe('staff-1');
+    expect(customer.isActiveForDefaultListing).toBe(false);
+
+    customer.unarchive();
+    expect(customer.isArchived).toBe(false);
+    expect(customer.status).toBe('active');
+    expect(customer.isActiveForDefaultListing).toBe(true);
+  });
+
+  it('blacklists and removes blacklist with reason required', () => {
+    const customer = TenantCustomer.link('tenant-1', 'global-1');
+
+    expect(() => customer.blacklist('   ', 'staff-1')).toThrow(
+      expect.objectContaining({ code: 'FIELD_REQUIRED' }),
+    );
+
+    customer.blacklist('بدهی معوق', 'staff-1');
+    expect(customer.isBlacklisted).toBe(true);
+    expect(customer.status).toBe('blacklisted');
+    expect(customer.blacklistReason).toBe('بدهی معوق');
+
+    customer.removeBlacklist();
+    expect(customer.isBlacklisted).toBe(false);
+    expect(customer.status).toBe('active');
+  });
+
+  it('keeps archived status after blacklist removal when archived', () => {
+    const customer = TenantCustomer.link('tenant-1', 'global-1');
+    customer.archive('staff-1');
+    customer.blacklist('ریسک', 'staff-2');
+
+    customer.removeBlacklist();
+    expect(customer.status).toBe('archived');
+    expect(customer.isArchived).toBe(true);
+  });
+
+  it('blocks profile updates when archived', () => {
+    const customer = TenantCustomer.link('tenant-1', 'global-1');
+    customer.archive('staff-1');
+
+    expect(() => customer.updateProfile({ notes: 'new' })).toThrow(
+      expect.objectContaining({ code: 'CUSTOMER_ARCHIVED' }),
+    );
+  });
 });

@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { DomainError } from '../../errors/domain.error.js';
 import { SaleDomainErrorCode } from '../errors.js';
+import {
+  SaleArchivedEvent,
+  SaleClosedEvent,
+  SaleTerminatedEvent,
+} from '../events/sale-lifecycle.events.js';
 import { InstallmentStatus } from '../installment.types.js';
 import { Sale } from '../sale.entity.js';
-import type { CreateSaleInput } from '../sale.types.js';
+import { SaleStatus, type CreateSaleInput } from '../sale.types.js';
 
 function futureUtcDate(daysFromNow = 7): Date {
   const date = new Date();
@@ -214,5 +219,139 @@ describe('Sale entity (TASK-065)', () => {
       expect(restored.title).toBe('فروش تست');
       expect(restored.totalAmountRial).toBe(10_000_000n);
     });
+  });
+});
+
+describe('Sale entity lifecycle (IFP-059)', () => {
+  const ACTOR_ID = '00000000-0000-0000-0000-000000000099';
+  const pendingOnly = [{ status: InstallmentStatus.PENDING }];
+  const withPaid = [{ status: InstallmentStatus.PAID }, { status: InstallmentStatus.PENDING }];
+
+  function activeSale() {
+    return Sale.create(baseCreateInput()).sale;
+  }
+
+  function completedSale() {
+    const sale = activeSale();
+    sale.markCompleted([
+      { status: InstallmentStatus.PAID },
+      { status: InstallmentStatus.WAIVED },
+      { status: InstallmentStatus.PAID },
+    ]);
+    return sale;
+  }
+
+  it('active → terminated OK and emits SaleTerminatedEvent', () => {
+    const sale = activeSale();
+
+    sale.terminate(ACTOR_ID, 'فسخ توافقی', new Date('2026-08-01T00:00:00.000Z'));
+
+    expect(sale.status).toBe(SaleStatus.TERMINATED);
+    expect(sale.terminateReason).toBe('فسخ توافقی');
+    const events = sale.pullDomainEvents();
+    expect(events).toHaveLength(1);
+    expect(events[0]).toBeInstanceOf(SaleTerminatedEvent);
+    expect((events[0] as SaleTerminatedEvent).toPayload().effectiveDate).toBe(
+      '2026-08-01T00:00:00.000Z',
+    );
+  });
+
+  it('completed → terminated FAIL', () => {
+    const sale = completedSale();
+
+    expect(() => sale.terminate(ACTOR_ID, 'تلاش فسخ')).toThrow(
+      new DomainError(SaleDomainErrorCode.INVALID_STATUS_TRANSITION),
+    );
+  });
+
+  it('archive from closed OK and emits SaleArchivedEvent', () => {
+    const sale = activeSale();
+    sale.close(ACTOR_ID, 'بستن قرارداد');
+    sale.archive(ACTOR_ID, 'بایگانی پرونده');
+
+    expect(sale.status).toBe(SaleStatus.ARCHIVED);
+    const events = sale.pullDomainEvents();
+    expect(events.at(-1)).toBeInstanceOf(SaleArchivedEvent);
+  });
+
+  it('archive from active FAIL', () => {
+    const sale = activeSale();
+
+    expect(() => sale.archive(ACTOR_ID, 'بایگانی زودهنگام')).toThrow(
+      new DomainError(SaleDomainErrorCode.INVALID_STATUS_TRANSITION),
+    );
+  });
+
+  it('canEditFinancials false when paid installment exists', () => {
+    const sale = activeSale();
+
+    expect(sale.canEditFinancials(pendingOnly)).toBe(true);
+    expect(sale.canEditFinancials(withPaid)).toBe(false);
+  });
+
+  it('cancel with paid installment FAIL', () => {
+    const sale = activeSale();
+
+    expect(() => sale.cancel('لغو', ACTOR_ID, withPaid)).toThrow(
+      new DomainError(SaleDomainErrorCode.SALE_HAS_PAID_INSTALLMENT),
+    );
+  });
+
+  it('terminate when archived → SALE_ARCHIVED_READONLY', () => {
+    const sale = activeSale();
+    sale.close(ACTOR_ID, 'بستن');
+    sale.archive(ACTOR_ID, 'بایگانی');
+
+    expect(() => sale.terminate(ACTOR_ID, 'تلاش فسخ')).toThrow(
+      new DomainError(SaleDomainErrorCode.SALE_ARCHIVED_READONLY),
+    );
+  });
+
+  it('terminated → closed OK and emits SaleClosedEvent', () => {
+    const sale = activeSale();
+    sale.terminate(ACTOR_ID, 'فسخ');
+    sale.close(ACTOR_ID, 'تسویه پس از فسخ', { waiveRemaining: true });
+
+    expect(sale.status).toBe(SaleStatus.CLOSED);
+    const events = sale.pullDomainEvents();
+    expect(events.at(-1)).toBeInstanceOf(SaleClosedEvent);
+    expect((events.at(-1) as SaleClosedEvent).toPayload().waiveRemaining).toBe(true);
+  });
+
+  it('unarchive restores prior status from metadata', () => {
+    const sale = activeSale();
+    sale.close(ACTOR_ID, 'بستن');
+    sale.archive(ACTOR_ID, 'بایگانی');
+    sale.unarchive(ACTOR_ID);
+
+    expect(sale.status).toBe(SaleStatus.CLOSED);
+    expect(sale.archivedAt).toBeNull();
+  });
+
+  it('canExtend requires active status and later due date', () => {
+    const sale = activeSale();
+    const lastDue = futureUtcDate(30);
+    const earlier = futureUtcDate(10);
+
+    expect(sale.canExtend(lastDue, futureUtcDate(60))).toBe(true);
+    expect(sale.canExtend(lastDue, earlier)).toBe(false);
+  });
+
+  it('canCopy false when archived', () => {
+    const sale = activeSale();
+    expect(sale.canCopy()).toBe(true);
+    sale.close(ACTOR_ID, 'بستن');
+    sale.archive(ACTOR_ID, 'بایگانی');
+    expect(sale.canCopy()).toBe(false);
+  });
+
+  it('archived forbids further archive', () => {
+    const sale = activeSale();
+    sale.close(ACTOR_ID, 'بستن');
+    sale.archive(ACTOR_ID, 'بایگانی');
+
+    expect(() => sale.archive(ACTOR_ID, 'دوباره')).toThrow(
+      new DomainError(SaleDomainErrorCode.SALE_ARCHIVED_READONLY),
+    );
   });
 });
