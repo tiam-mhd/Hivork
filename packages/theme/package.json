@@ -10,6 +10,10 @@
     "./react": {
       "types": "./dist/react/index.d.ts",
       "default": "./dist/react/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/apply-theme.d.ts",
+      "default": "./dist/runtime/apply-theme.js"
     }
   },
   "scripts": {

@@ -1,6 +1,4 @@
-'use client';
-
-import type { ResolvedTheme, ThemeColorMode, ThemeDefinition } from '@hivork/contracts/theme';
+import type { ThemeColorMode, ThemeModePreference } from '@hivork/contracts/theme';
 import {
   createContext,
   useCallback,
@@ -11,53 +9,57 @@ import {
   type ReactNode,
 } from 'react';
 
-import { DEFAULT_COLOR_MODE, DEFAULT_THEME_ID } from '../constants.js';
+import { DEFAULT_THEME_ID, DEFAULT_THEME_MODE } from '../constants.js';
 import {
-  persistColorMode,
+  getSystemColorMode,
   persistThemeId,
-  readColorModeFromStorage,
+  persistThemeMode,
   readThemeIdFromStorage,
-  resolveColorMode,
+  readThemeModeFromStorage,
+  resolveEffectiveColorMode,
   resolveThemeId,
+  resolveThemeModePreference,
 } from '../core/persistence.js';
 import { getThemeOrThrow, listThemes } from '../core/registry.js';
 import { resolveThemeForMode } from '../core/resolver.js';
 import { applyResolvedThemeToElement } from '../core/to-css-variables.js';
-
-type ThemeContextValue = {
-  themeId: string;
-  colorMode: ThemeColorMode;
-  theme: ThemeDefinition;
-  resolvedTheme: ResolvedTheme;
-  themes: ThemeDefinition[];
-  setThemeId: (id: string) => void;
-  setColorMode: (mode: ThemeColorMode) => void;
-  previewThemeId: (id: string | null) => void;
-};
+import type { ThemeContextValue } from './theme-context.js';
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 type ThemeProviderProps = {
   children: ReactNode;
   initialThemeId?: string;
+  /** @deprecated Use initialThemeMode */
   initialColorMode?: ThemeColorMode;
+  initialThemeMode?: ThemeModePreference;
 };
 
 export function ThemeProvider({
   children,
   initialThemeId,
   initialColorMode,
+  initialThemeMode,
 }: ThemeProviderProps) {
   const resolvedInitialThemeId = resolveThemeId(initialThemeId ?? readThemeIdFromStorage());
-  const resolvedInitialColorMode = resolveColorMode(
-    initialColorMode ?? readColorModeFromStorage(),
+  const resolvedInitialThemeMode = resolveThemeModePreference(
+    initialThemeMode ??
+      (initialColorMode === 'light' || initialColorMode === 'dark' ? initialColorMode : undefined) ??
+      readThemeModeFromStorage(),
   );
 
   const [themeId, setThemeIdState] = useState(resolvedInitialThemeId);
-  const [colorMode, setColorModeState] = useState<ThemeColorMode>(resolvedInitialColorMode);
+  const [themeMode, setThemeModeState] = useState<ThemeModePreference>(resolvedInitialThemeMode);
+  const [systemColorMode, setSystemColorMode] = useState<ThemeColorMode>(() =>
+    resolvedInitialThemeMode === 'system' ? getSystemColorMode() : resolveEffectiveColorMode(resolvedInitialThemeMode),
+  );
   const [previewId, setPreviewId] = useState<string | null>(null);
 
   const activeThemeId = previewId ?? themeId;
+  const colorMode = useMemo(
+    () => (themeMode === 'system' ? systemColorMode : themeMode),
+    [systemColorMode, themeMode],
+  );
   const theme = useMemo(() => getThemeOrThrow(activeThemeId), [activeThemeId]);
   const resolvedTheme = useMemo(
     () => resolveThemeForMode(theme, colorMode),
@@ -65,13 +67,25 @@ export function ThemeProvider({
   );
   const themes = useMemo(() => listThemes(), []);
 
-  const applyToDocument = useCallback((nextTheme: ResolvedTheme) => {
+  const applyToDocument = useCallback((nextTheme: ReturnType<typeof resolveThemeForMode>) => {
     applyResolvedThemeToElement(document.documentElement, nextTheme);
   }, []);
 
   useLayoutEffect(() => {
     applyToDocument(resolvedTheme);
   }, [applyToDocument, resolvedTheme]);
+
+  useLayoutEffect(() => {
+    if (themeMode !== 'system') {
+      return;
+    }
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const update = () => setSystemColorMode(media.matches ? 'dark' : 'light');
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, [themeMode]);
 
   const setThemeId = useCallback(
     (id: string) => {
@@ -84,14 +98,26 @@ export function ThemeProvider({
     [applyToDocument, colorMode],
   );
 
-  const setColorMode = useCallback(
-    (mode: ThemeColorMode) => {
-      const resolved = resolveColorMode(mode);
-      setColorModeState(resolved);
-      persistColorMode(resolved);
-      applyToDocument(resolveThemeForMode(getThemeOrThrow(activeThemeId), resolved));
+  const setThemeMode = useCallback(
+    (mode: ThemeModePreference) => {
+      const resolved = resolveThemeModePreference(mode);
+      const effective = resolveEffectiveColorMode(resolved);
+      setThemeModeState(resolved);
+      if (resolved === 'system') {
+        setSystemColorMode(getSystemColorMode());
+      }
+      persistThemeMode(resolved);
+      applyToDocument(resolveThemeForMode(getThemeOrThrow(activeThemeId), effective));
     },
     [activeThemeId, applyToDocument],
+  );
+
+  /** @deprecated Use setThemeMode */
+  const setColorMode = useCallback(
+    (mode: ThemeColorMode) => {
+      setThemeMode(mode);
+    },
+    [setThemeMode],
   );
 
   const previewThemeId = useCallback((id: string | null) => {
@@ -105,15 +131,28 @@ export function ThemeProvider({
   const value = useMemo<ThemeContextValue>(
     () => ({
       themeId,
+      themeMode,
       colorMode,
       theme,
       resolvedTheme,
       themes,
       setThemeId,
+      setThemeMode,
       setColorMode,
       previewThemeId,
     }),
-    [colorMode, previewThemeId, resolvedTheme, setColorMode, setThemeId, theme, themeId, themes],
+    [
+      colorMode,
+      previewThemeId,
+      resolvedTheme,
+      setColorMode,
+      setThemeId,
+      setThemeMode,
+      theme,
+      themeId,
+      themeMode,
+      themes,
+    ],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -131,4 +170,4 @@ export function useThemeOptional(): ThemeContextValue | null {
   return useContext(ThemeContext);
 }
 
-export { DEFAULT_COLOR_MODE, DEFAULT_THEME_ID };
+export { DEFAULT_THEME_ID, DEFAULT_THEME_MODE };

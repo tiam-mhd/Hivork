@@ -1,4 +1,4 @@
-import type { ResolvedTheme } from '@hivork/contracts/theme';
+import type { ResolvedTheme, ThemeColorMode } from '@hivork/contracts/theme';
 
 export type CssVariableMap = Record<string, string>;
 
@@ -145,6 +145,15 @@ export function applyResolvedThemeToElement(element: HTMLElement, theme: Resolve
   element.style.fontSize = theme.typography.fontSizeBase;
   element.style.lineHeight = theme.typography.lineHeightBase;
   element.style.letterSpacing = theme.typography.letterSpacing;
+  syncDocumentDarkClass(theme.colorMode);
+}
+
+export function syncDocumentDarkClass(colorMode: ThemeColorMode): void {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  document.documentElement.classList.toggle('dark', colorMode === 'dark');
 }
 
 /** @deprecated Use applyResolvedThemeToElement */
