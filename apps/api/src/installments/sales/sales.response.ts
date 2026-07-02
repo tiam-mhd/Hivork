@@ -1,4 +1,9 @@
-import type { CancelSaleResult, GetSaleOutput, SaleDetail, SaleSummary } from '@hivork/application';
+import type {
+  CancelSaleResult,
+  GetSaleEnterpriseOutput,
+  SaleDetail,
+  SaleSummary,
+} from '@hivork/application';
 
 export function parseDateOnlyUtc(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
@@ -21,7 +26,7 @@ export function toSaleInstallmentResponse(installment: SaleDetail['installments'
   };
 }
 
-export function toSaleDetailResponse(sale: SaleDetail | GetSaleOutput) {
+export function toSaleDetailResponse(sale: SaleDetail | GetSaleEnterpriseOutput) {
   return {
     id: sale.id,
     tenantCustomerId: sale.tenantCustomerId,
@@ -45,6 +50,28 @@ export function toSaleDetailResponse(sale: SaleDetail | GetSaleOutput) {
     createdAt: sale.createdAt,
     ...(sale.updatedAt !== undefined ? { updatedAt: sale.updatedAt } : {}),
     ...(sale.version !== undefined ? { version: sale.version } : {}),
+  };
+}
+
+export function toSaleEnterpriseDetailResponse(sale: GetSaleEnterpriseOutput) {
+  const base = toSaleDetailResponse(sale);
+
+  return {
+    ...base,
+    status: sale.status,
+    contractNumber: sale.contractNumber,
+    customTerms: sale.customTerms,
+    signatureStatus: sale.signatureStatus,
+    signedAt: sale.signedAt,
+    insuranceRial: sale.insuranceRial,
+    insuranceProvider: sale.insuranceProvider,
+    extendedFromSaleId: sale.extendedFromSaleId,
+    copiedFromSaleId: sale.copiedFromSaleId,
+    terminatedAt: sale.terminatedAt,
+    closedAt: sale.closedAt,
+    archivedAt: sale.archivedAt,
+    ...(sale.versions ? { versions: sale.versions } : {}),
+    ...(sale.attachments ? { attachments: sale.attachments } : {}),
   };
 }
 

@@ -12,6 +12,7 @@ import {
   PrismaModule,
   PrismaModuleEntitlement,
   PrismaTenantSettingsRepository,
+  PrismaTenantSequenceRepository,
   PrismaUnitOfWork,
   SettingsSchemaRegistry,
 } from '@hivork/infrastructure';
@@ -27,6 +28,7 @@ import { SecuritySettingsController } from './security-settings.controller.js';
   providers: [
     SettingsSchemaRegistry,
     PrismaTenantSettingsRepository,
+    PrismaTenantSequenceRepository,
     PrismaModuleEntitlement,
     PrismaUnitOfWork,
     {
@@ -51,8 +53,13 @@ import { SecuritySettingsController } from './security-settings.controller.js';
       useFactory: (
         moduleEntitlement: PrismaModuleEntitlement,
         settingsRepository: PrismaTenantSettingsRepository,
-      ) => new GetInstallmentSettingsUseCase(moduleEntitlement, settingsRepository),
-      inject: [PrismaModuleEntitlement, PrismaTenantSettingsRepository],
+        sequences: PrismaTenantSequenceRepository,
+      ) => new GetInstallmentSettingsUseCase(moduleEntitlement, settingsRepository, sequences),
+      inject: [
+        PrismaModuleEntitlement,
+        PrismaTenantSettingsRepository,
+        PrismaTenantSequenceRepository,
+      ],
     },
     {
       provide: UpdateInstallmentSettingsUseCase,

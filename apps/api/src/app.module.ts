@@ -26,6 +26,7 @@ import { ReportsModule } from './installments/reports/reports.module';
 import { StaffModule } from './core/staff/staff.module';
 import { SettingsModule } from './settings/settings.module';
 import { ApiKeysModule } from './settings/api-keys.module.js';
+import { RealtimeModule } from './core/realtime/realtime.module';
 import { TenantsModule } from './tenants/tenants.module';
 
 @Module({
@@ -33,7 +34,11 @@ import { TenantsModule } from './tenants/tenants.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: [
+        join(process.cwd(), '.env.local'),
         join(process.cwd(), '.env'),
+        join(process.cwd(), 'apps/api/.env.local'),
+        join(process.cwd(), 'apps/api/.env'),
+        join(process.cwd(), '../../.env.local'),
         join(process.cwd(), '../../.env'),
       ],
       validate: validateEnv,
@@ -68,6 +73,7 @@ import { TenantsModule } from './tenants/tenants.module';
     SettingsModule,
     ApiKeysModule,
     TenantsModule,
+    RealtimeModule,
     MyModule,
     CoreModule,
     InstallmentsModule,

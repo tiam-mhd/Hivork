@@ -1,24 +1,59 @@
 import {
   ApplicationError,
+  BulkTagCustomersUseCase,
+  BulkUntagCustomersUseCase,
+  buildCustomerImportTemplateBuffer,
   CreateTenantCustomerUseCase,
   CUSTOMER_IMPORT_MAX_FILE_BYTES,
   ExportTenantCustomersUseCase,
+  type ExportTenantCustomersInput,
+  type ExportTenantCustomersOutput,
+  GetStaffPermissionsUseCase,
   GetTenantCustomerUseCase,
+  GetCustomerTimelineUseCase,
+  ListCustomerPaymentsUseCase,
+  MergeTenantCustomersUseCase,
+  TransferCustomerOwnershipUseCase,
+  AdjustCustomerScoreUseCase,
+  BlacklistTenantCustomerUseCase,
+  UnblacklistTenantCustomerUseCase,
+  ListCustomerContractsUseCase,
   ImportCustomersExcelUseCase,
   ListDeletedTenantCustomersUseCase,
   ListTenantCustomersUseCase,
-  RestoreEntityUseCase,
-  SoftDeleteEntityUseCase,
+  SoftDeleteTenantCustomerUseCase,
+  RestoreTenantCustomerUseCase,
+  ArchiveTenantCustomerUseCase,
+  UnarchiveTenantCustomerUseCase,
   UpdateTenantCustomerUseCase,
 } from '@hivork/application';
 import {
+  BulkTagCustomersSchema,
+  BulkTagCustomersResponseSchema,
+  BulkUntagCustomersSchema,
   CreateTenantCustomerSchema,
   CustomerListQuerySchema,
+  ExportCustomersQuerySchema,
   ExportCustomersRequestSchema,
   GetTenantCustomerQuerySchema,
+  ImportCustomersQuerySchema,
+  ListCustomerTimelineQuerySchema,
+  ListCustomerPaymentsQuerySchema,
+  CustomerPaymentListResponseSchema,
+  ListCustomerContractsQuerySchema,
+  CustomerContractListResponseSchema,
+  MergeCustomersSchema,
+  MergeCustomersResponseSchema,
+  TransferCustomerOwnershipSchema,
+  AdjustCustomerScoreSchema,
+  BlacklistCustomerSchema,
+  UnblacklistCustomerSchema,
   ListDeletedCustomersQuerySchema,
-  SoftDeleteCustomerBodySchema,
+  DeleteCustomerSchema,
+  ArchiveCustomerSchema,
   UpdateTenantCustomerSchema,
+  type ExportCustomersQueryDto,
+  type ExportCustomersRequestDto,
 } from '@hivork/contracts/customers';
 import { RequireModule } from '@hivork/module-core';
 import {
@@ -57,6 +92,8 @@ import {
   toTenantCustomerListItemResponse,
   toTenantCustomerResponse,
 } from './customers.response';
+import { toCustomerPaymentResponse } from './customer-payments.response.js';
+import { toCustomerContractResponse } from './customer-contracts.response.js';
 import { AppConfigService } from '../config/app-config.service';
 
 const customerIdParamSchema = z.string().uuid();
@@ -79,11 +116,24 @@ export class CustomersController {
     private readonly listTenantCustomers: ListTenantCustomersUseCase,
     private readonly exportTenantCustomers: ExportTenantCustomersUseCase,
     private readonly getTenantCustomer: GetTenantCustomerUseCase,
+    private readonly getCustomerTimeline: GetCustomerTimelineUseCase,
+    private readonly listCustomerPayments: ListCustomerPaymentsUseCase,
+    private readonly listCustomerContracts: ListCustomerContractsUseCase,
     private readonly updateTenantCustomer: UpdateTenantCustomerUseCase,
+    private readonly softDeleteTenantCustomer: SoftDeleteTenantCustomerUseCase,
+    private readonly restoreTenantCustomer: RestoreTenantCustomerUseCase,
+    private readonly archiveTenantCustomer: ArchiveTenantCustomerUseCase,
+    private readonly unarchiveTenantCustomer: UnarchiveTenantCustomerUseCase,
     private readonly importCustomersExcel: ImportCustomersExcelUseCase,
-    private readonly softDeleteCustomer: SoftDeleteEntityUseCase,
-    private readonly restoreCustomer: RestoreEntityUseCase,
     private readonly listDeletedCustomers: ListDeletedTenantCustomersUseCase,
+    private readonly bulkTagCustomers: BulkTagCustomersUseCase,
+    private readonly bulkUntagCustomers: BulkUntagCustomersUseCase,
+    private readonly getStaffPermissions: GetStaffPermissionsUseCase,
+    private readonly mergeTenantCustomers: MergeTenantCustomersUseCase,
+    private readonly transferCustomerOwnership: TransferCustomerOwnershipUseCase,
+    private readonly adjustCustomerScore: AdjustCustomerScoreUseCase,
+    private readonly blacklistTenantCustomer: BlacklistTenantCustomerUseCase,
+    private readonly unblacklistTenantCustomer: UnblacklistTenantCustomerUseCase,
     private readonly appConfig: AppConfigService,
   ) {}
 
@@ -107,6 +157,12 @@ export class CustomersController {
     }
 
     try {
+      const effective = await this.getStaffPermissions.execute({ staffId: staff.id });
+      const canBlacklist = this.getStaffPermissions.hasPermission(
+        effective,
+        'installments.customer.blacklist',
+      );
+
       const result = await this.createTenantCustomer.execute({
         tenantId: staff.tenantId,
         actorId: staff.id,
@@ -124,6 +180,15 @@ export class CustomersController {
         defaultBranchId: parsed.data.defaultBranchId,
         preferredContactChannel: parsed.data.preferredContactChannel,
         marketingOptIn: parsed.data.marketingOptIn,
+        categoryId: parsed.data.categoryId,
+        assignedStaffId: parsed.data.assignedStaffId,
+        status: parsed.data.status,
+        addresses: parsed.data.addresses,
+        emergencyContacts: parsed.data.emergencyContacts,
+        contactPhones: parsed.data.contactPhones,
+        isBlacklisted: parsed.data.isBlacklisted,
+        blacklistReason: parsed.data.blacklistReason,
+        canBlacklist,
         staffContext: toStaffContext(staff),
         ip: request.ip,
         userAgent: request.headers['user-agent'],
@@ -150,6 +215,28 @@ export class CustomersController {
       });
     }
 
+    const effective = await this.getStaffPermissions.execute({ staffId: staff.id });
+
+    if (
+      parsed.data.includeArchived &&
+      !this.getStaffPermissions.hasPermission(effective, 'installments.customer.archive')
+    ) {
+      throw new HttpException(
+        { code: 'PERMISSION_DENIED', message: 'Including archived customers is not permitted.' },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    if (
+      parsed.data.linkStatus === 'deleted' &&
+      !this.getStaffPermissions.hasPermission(effective, 'installments.customer.restore')
+    ) {
+      throw new HttpException(
+        { code: 'PERMISSION_DENIED', message: 'Listing deleted customers is not permitted.' },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     try {
       const result = await this.listTenantCustomers.execute({
         tenantId: staff.tenantId,
@@ -161,7 +248,21 @@ export class CustomersController {
         filter: parsed.data.filter,
         tags: parsed.data.tags,
         status: parsed.data.status,
-        defaultBranchId: parsed.data.defaultBranchId,
+        branchId: parsed.data.branchId,
+        categoryId: parsed.data.categoryId,
+        isBlacklisted: parsed.data.isBlacklisted,
+        assignedStaffId: parsed.data.assignedStaffId,
+        linkStatus: parsed.data.linkStatus,
+        createdAtFrom: parsed.data.createdAtFrom ? new Date(parsed.data.createdAtFrom) : undefined,
+        createdAtTo: parsed.data.createdAtTo ? new Date(parsed.data.createdAtTo) : undefined,
+        lastPurchaseAtFrom: parsed.data.lastPurchaseAtFrom
+          ? new Date(parsed.data.lastPurchaseAtFrom)
+          : undefined,
+        lastPurchaseAtTo: parsed.data.lastPurchaseAtTo
+          ? new Date(parsed.data.lastPurchaseAtTo)
+          : undefined,
+        includeArchived: parsed.data.includeArchived,
+        includeCount: parsed.data.includeCount,
         staffContext: toStaffContext(staff),
       });
 
@@ -169,6 +270,41 @@ export class CustomersController {
         data: result.data.map(toTenantCustomerListItemResponse),
         meta: result.meta,
       };
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
+
+  @Get('export')
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.export')
+  @ApplyDataScope()
+  async exportCustomersGet(
+    @CurrentStaff() staff: StaffContext,
+    @Query() query: unknown,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const parsed = ExportCustomersQuerySchema.safeParse(query);
+    if (!parsed.success) {
+      const filterInvalid = parsed.error.issues.some(
+        (issue: z.ZodIssue) =>
+          issue.message === 'FILTER_INVALID' || issue.path.includes('filter'),
+      );
+      throw new BadRequestException({
+        code: filterInvalid ? 'FILTER_INVALID' : 'VALIDATION_ERROR',
+        message: parsed.error.issues[0]?.message ?? 'Invalid query parameters',
+      });
+    }
+
+    await this.assertExportListPermissions(staff, parsed.data);
+
+    try {
+      const result = await this.exportTenantCustomers.execute(
+        this.buildExportInput(staff, req, parsed.data),
+      );
+      this.sendExportResponse(res, result);
     } catch (error) {
       throw this.toHttpException(error);
     }
@@ -194,52 +330,87 @@ export class CustomersController {
       });
     }
 
+    await this.assertExportListPermissions(staff, parsed.data);
+
     try {
-      const result = await this.exportTenantCustomers.execute({
+      const result = await this.exportTenantCustomers.execute(
+        this.buildExportInput(staff, req, parsed.data),
+      );
+      this.sendExportResponse(res, result);
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
+
+  @Post('bulk-tag')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.update')
+  @ApplyDataScope()
+  async bulkTag(
+    @CurrentStaff() staff: StaffContext,
+    @Body() body: unknown,
+    @Req() req: Request,
+  ) {
+    const parsed = BulkTagCustomersSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: parsed.error.issues[0]?.message ?? 'Invalid request body',
+      });
+    }
+
+    try {
+      const result = await this.bulkTagCustomers.execute({
         tenantId: staff.tenantId,
         actorId: staff.id,
-        search: parsed.data.search,
-        filter: parsed.data.filter,
-        sort: parsed.data.sort,
-        tags: parsed.data.tags,
-        status: parsed.data.status,
-        defaultBranchId: parsed.data.defaultBranchId,
-        columns: parsed.data.columns,
         ids: parsed.data.ids,
-        locale: parsed.data.locale,
-        format: parsed.data.format,
+        tag: parsed.data.tag,
         staffContext: toStaffContext(staff),
-        maxRows: this.appConfig.exportMaxRows,
-        pdfMaxRows: this.appConfig.pdfMaxRows,
         ip: req.ip,
         userAgent: req.headers['user-agent'],
-        filterHashPayload: parsed.data,
       });
 
-      if (result.format === 'pdf') {
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
-        res.setHeader('X-Export-Row-Count', String(result.rowCount));
-        res.send(result.buffer);
-        return;
-      }
+      return BulkTagCustomersResponseSchema.parse(result);
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
 
-      res.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      );
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${result.filename}"`,
-      );
+  @Post('bulk-untag')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.update')
+  @ApplyDataScope()
+  async bulkUntag(
+    @CurrentStaff() staff: StaffContext,
+    @Body() body: unknown,
+    @Req() req: Request,
+  ) {
+    const parsed = BulkUntagCustomersSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: parsed.error.issues[0]?.message ?? 'Invalid request body',
+      });
+    }
 
-      if (result.rowCount === 0) {
-        res.setHeader('X-Export-Row-Count', '0');
-      } else {
-        res.setHeader('X-Export-Row-Count', String(result.rowCount));
-      }
+    try {
+      const result = await this.bulkUntagCustomers.execute({
+        tenantId: staff.tenantId,
+        actorId: staff.id,
+        ids: parsed.data.ids,
+        tag: parsed.data.tag,
+        staffContext: toStaffContext(staff),
+        isUndo: parsed.data.isUndo,
+        originalAction: parsed.data.originalAction,
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
 
-      result.stream.pipe(res);
+      return BulkTagCustomersResponseSchema.parse(result);
     } catch (error) {
       throw this.toHttpException(error);
     }
@@ -277,6 +448,59 @@ export class CustomersController {
     }
   }
 
+  @Post('merge')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.merge')
+  @ApplyDataScope()
+  async mergeCustomers(
+    @CurrentStaff() staff: StaffContext,
+    @Body() body: unknown,
+    @Headers('idempotency-key') idempotencyKeyHeader: string | undefined,
+    @Req() request: Request,
+  ) {
+    const idempotencyKeyResult = idempotencyKeySchema.safeParse(idempotencyKeyHeader);
+    if (!idempotencyKeyResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Idempotency-Key header must be a valid UUID.',
+      });
+    }
+
+    const parsed = MergeCustomersSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: parsed.error.issues[0]?.message ?? 'Invalid request body',
+      });
+    }
+
+    try {
+      const result = await this.mergeTenantCustomers.execute({
+        tenantId: staff.tenantId,
+        sourceTenantCustomerId: parsed.data.sourceTenantCustomerId,
+        targetTenantCustomerId: parsed.data.targetTenantCustomerId,
+        reason: parsed.data.reason,
+        actorId: staff.id,
+        idempotencyKey: idempotencyKeyResult.data,
+        staffContext: toStaffContext(staff),
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      return MergeCustomersResponseSchema.parse({
+        data: toTenantCustomerDetailResponse(result.customer),
+        meta: {
+          mergedSalesCount: result.mergedSalesCount,
+          mergedDocumentsCount: result.mergedDocumentsCount,
+        },
+      });
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
+
   @Post('import')
   @HttpCode(HttpStatus.OK)
   @UseGuards(ModuleGuard)
@@ -292,6 +516,7 @@ export class CustomersController {
     @CurrentStaff() staff: StaffContext,
     @UploadedFile() file: Express.Multer.File | undefined,
     @Headers('idempotency-key') idempotencyKeyHeader: string | undefined,
+    @Query() query: unknown,
     @Req() request: Request,
   ) {
     const idempotencyKeyResult = idempotencyKeySchema.safeParse(idempotencyKeyHeader);
@@ -299,6 +524,14 @@ export class CustomersController {
       throw new BadRequestException({
         code: 'VALIDATION_ERROR',
         message: 'Idempotency-Key header must be a valid UUID.',
+      });
+    }
+
+    const parsedQuery = ImportCustomersQuerySchema.safeParse(query);
+    if (!parsedQuery.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid import query parameters.',
       });
     }
 
@@ -316,12 +549,169 @@ export class CustomersController {
         idempotencyKey: idempotencyKeyResult.data,
         fileBuffer: file.buffer,
         defaultBranchId: staff.activeBranchId ?? undefined,
+        includeErrorFile: parsedQuery.data.includeErrorFile,
         staffContext: toStaffContext(staff),
         ip: request.ip,
         userAgent: request.headers['user-agent'],
       });
 
       return { data: toImportCustomersResponse(result) };
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
+
+  @Get('import/template')
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.import')
+  async downloadImportTemplate(@Res() res: Response) {
+    const buffer = await buildCustomerImportTemplateBuffer();
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="customer-import-template.xlsx"',
+    );
+    res.send(buffer);
+  }
+
+  @Get(':id/timeline')
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.view')
+  @ApplyDataScope()
+  async getTimeline(
+    @CurrentStaff() staff: StaffContext,
+    @Param('id') id: string,
+    @Query() query: unknown,
+  ) {
+    const idResult = customerIdParamSchema.safeParse(id);
+    if (!idResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Customer id must be a valid UUID.',
+      });
+    }
+
+    const queryResult = ListCustomerTimelineQuerySchema.safeParse(query);
+    if (!queryResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: queryResult.error.issues[0]?.message ?? 'Invalid query parameters',
+      });
+    }
+
+    try {
+      return await this.getCustomerTimeline.execute({
+        tenantId: staff.tenantId,
+        tenantCustomerId: idResult.data,
+        limit: queryResult.data.limit,
+        cursor: queryResult.data.cursor,
+        types: queryResult.data.types,
+        occurredFrom: queryResult.data.occurredFrom,
+        occurredTo: queryResult.data.occurredTo,
+        staffContext: toStaffContext(staff),
+      });
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
+
+  @Get(':id/payments')
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.view')
+  @ApplyDataScope()
+  async listPayments(
+    @CurrentStaff() staff: StaffContext,
+    @Param('id') id: string,
+    @Query() query: unknown,
+  ) {
+    const idResult = customerIdParamSchema.safeParse(id);
+    if (!idResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Customer id must be a valid UUID.',
+      });
+    }
+
+    const queryResult = ListCustomerPaymentsQuerySchema.safeParse(query);
+    if (!queryResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: queryResult.error.issues[0]?.message ?? 'Invalid query parameters',
+      });
+    }
+
+    try {
+      const result = await this.listCustomerPayments.execute({
+        tenantId: staff.tenantId,
+        tenantCustomerId: idResult.data,
+        limit: queryResult.data.limit,
+        cursor: queryResult.data.cursor,
+        status: queryResult.data.status,
+        occurredFrom: queryResult.data.occurredFrom,
+        occurredTo: queryResult.data.occurredTo,
+        staffContext: toStaffContext(staff),
+      });
+
+      return CustomerPaymentListResponseSchema.parse({
+        data: result.items.map(toCustomerPaymentResponse),
+        summary: {
+          totalPaidRial: result.summary.totalPaidRial.toString(),
+          pendingCount: result.summary.pendingCount,
+        },
+        meta: result.meta,
+      });
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
+
+  @Get(':id/contracts')
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.view')
+  @ApplyDataScope()
+  async listContracts(
+    @CurrentStaff() staff: StaffContext,
+    @Param('id') id: string,
+    @Query() query: unknown,
+  ) {
+    const idResult = customerIdParamSchema.safeParse(id);
+    if (!idResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Customer id must be a valid UUID.',
+      });
+    }
+
+    const queryResult = ListCustomerContractsQuerySchema.safeParse(query);
+    if (!queryResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: queryResult.error.issues[0]?.message ?? 'Invalid query parameters',
+      });
+    }
+
+    try {
+      const result = await this.listCustomerContracts.execute({
+        tenantId: staff.tenantId,
+        tenantCustomerId: idResult.data,
+        limit: queryResult.data.limit,
+        cursor: queryResult.data.cursor,
+        status: queryResult.data.status,
+        staffContext: toStaffContext(staff),
+      });
+
+      return CustomerContractListResponseSchema.parse({
+        data: result.items.map(toCustomerContractResponse),
+        meta: result.meta,
+      });
     } catch (error) {
       throw this.toHttpException(error);
     }
@@ -395,6 +785,12 @@ export class CustomersController {
     }
 
     try {
+      const effective = await this.getStaffPermissions.execute({ staffId: staff.id });
+      const canBlacklist = this.getStaffPermissions.hasPermission(
+        effective,
+        'installments.customer.blacklist',
+      );
+
       await this.updateTenantCustomer.execute({
         tenantId: staff.tenantId,
         actorId: staff.id,
@@ -414,6 +810,14 @@ export class CustomersController {
         preferredContactChannel: parsed.data.preferredContactChannel,
         marketingOptIn: parsed.data.marketingOptIn,
         metadata: parsed.data.metadata,
+        categoryId: parsed.data.categoryId,
+        assignedStaffId: parsed.data.assignedStaffId,
+        addresses: parsed.data.addresses,
+        emergencyContacts: parsed.data.emergencyContacts,
+        contactPhones: parsed.data.contactPhones,
+        isBlacklisted: parsed.data.isBlacklisted,
+        blacklistReason: parsed.data.blacklistReason,
+        canBlacklist,
         canUpdateInternalNotes: true,
         staffContext: toStaffContext(staff),
         ip: request.ip,
@@ -434,14 +838,25 @@ export class CustomersController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @RequirePermission('core.customer.delete')
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.delete')
+  @ApplyDataScope()
   async softDelete(
     @CurrentStaff() staff: StaffContext,
     @Param('id') id: string,
     @Body() body: unknown,
     @Req() request: Request,
   ): Promise<void> {
-    const parsed = SoftDeleteCustomerBodySchema.safeParse(body ?? {});
+    const idResult = customerIdParamSchema.safeParse(id);
+    if (!idResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Customer id must be a valid UUID.',
+      });
+    }
+
+    const parsed = DeleteCustomerSchema.safeParse(body ?? {});
     if (!parsed.success) {
       throw new BadRequestException({
         code: 'VALIDATION_ERROR',
@@ -450,14 +865,297 @@ export class CustomersController {
     }
 
     try {
-      await this.softDeleteCustomer.execute({
+      await this.softDeleteTenantCustomer.execute({
         tenantId: staff.tenantId,
-        entityId: id,
+        tenantCustomerId: idResult.data,
         actorId: staff.id,
         deleteReason: parsed.data.deleteReason,
+        staffContext: toStaffContext(staff),
         ip: request.ip,
         userAgent: request.headers['user-agent'],
       });
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
+
+  @Post(':id/transfer-ownership')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.transfer')
+  @ApplyDataScope()
+  async transferOwnership(
+    @CurrentStaff() staff: StaffContext,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: Request,
+  ) {
+    const idResult = customerIdParamSchema.safeParse(id);
+    if (!idResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Customer id must be a valid UUID.',
+      });
+    }
+
+    const parsed = TransferCustomerOwnershipSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: parsed.error.issues[0]?.message ?? 'Invalid request body',
+      });
+    }
+
+    try {
+      const result = await this.transferCustomerOwnership.execute({
+        tenantId: staff.tenantId,
+        tenantCustomerId: idResult.data,
+        newStaffId: parsed.data.newStaffId,
+        note: parsed.data.note,
+        actorId: staff.id,
+        staffContext: toStaffContext(staff),
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      return toTenantCustomerDetailResponse(result);
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
+
+  @Patch(':id/score')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.score.adjust')
+  @ApplyDataScope()
+  async adjustScore(
+    @CurrentStaff() staff: StaffContext,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: Request,
+  ) {
+    const idResult = customerIdParamSchema.safeParse(id);
+    if (!idResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Customer id must be a valid UUID.',
+      });
+    }
+
+    const parsed = AdjustCustomerScoreSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: parsed.error.issues[0]?.message ?? 'Invalid request body',
+      });
+    }
+
+    try {
+      const result = await this.adjustCustomerScore.execute({
+        tenantId: staff.tenantId,
+        tenantCustomerId: idResult.data,
+        delta: parsed.data.delta,
+        newScore: parsed.data.newScore,
+        reason: parsed.data.reason,
+        actorId: staff.id,
+        staffContext: toStaffContext(staff),
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      return toTenantCustomerDetailResponse(result);
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
+
+  @Post(':id/blacklist')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.blacklist')
+  @ApplyDataScope()
+  async blacklistCustomer(
+    @CurrentStaff() staff: StaffContext,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: Request,
+  ) {
+    const idResult = customerIdParamSchema.safeParse(id);
+    if (!idResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Customer id must be a valid UUID.',
+      });
+    }
+
+    const parsed = BlacklistCustomerSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: parsed.error.issues[0]?.message ?? 'Invalid request body',
+      });
+    }
+
+    try {
+      const result = await this.blacklistTenantCustomer.execute({
+        tenantId: staff.tenantId,
+        tenantCustomerId: idResult.data,
+        reason: parsed.data.reason,
+        actorId: staff.id,
+        staffContext: toStaffContext(staff),
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      return toTenantCustomerDetailResponse(result);
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
+
+  @Post(':id/unblacklist')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.blacklist')
+  @ApplyDataScope()
+  async unblacklistCustomer(
+    @CurrentStaff() staff: StaffContext,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: Request,
+  ) {
+    const idResult = customerIdParamSchema.safeParse(id);
+    if (!idResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Customer id must be a valid UUID.',
+      });
+    }
+
+    const parsed = UnblacklistCustomerSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: parsed.error.issues[0]?.message ?? 'Invalid request body',
+      });
+    }
+
+    try {
+      const result = await this.unblacklistTenantCustomer.execute({
+        tenantId: staff.tenantId,
+        tenantCustomerId: idResult.data,
+        actorId: staff.id,
+        staffContext: toStaffContext(staff),
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      return toTenantCustomerDetailResponse(result);
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
+
+  @Post(':id/archive')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.archive')
+  @ApplyDataScope()
+  async archive(
+    @CurrentStaff() staff: StaffContext,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: Request,
+  ) {
+    const idResult = customerIdParamSchema.safeParse(id);
+    if (!idResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Customer id must be a valid UUID.',
+      });
+    }
+
+    const parsed = ArchiveCustomerSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: parsed.error.issues[0]?.message ?? 'Invalid request body',
+      });
+    }
+
+    try {
+      await this.archiveTenantCustomer.execute({
+        tenantId: staff.tenantId,
+        tenantCustomerId: idResult.data,
+        actorId: staff.id,
+        staffContext: toStaffContext(staff),
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      const full = await this.getTenantCustomer.execute({
+        tenantId: staff.tenantId,
+        tenantCustomerId: idResult.data,
+        staffContext: toStaffContext(staff),
+      });
+
+      return toTenantCustomerDetailResponse(full);
+    } catch (error) {
+      throw this.toHttpException(error);
+    }
+  }
+
+  @Post(':id/unarchive')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.archive')
+  @ApplyDataScope()
+  async unarchive(
+    @CurrentStaff() staff: StaffContext,
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: Request,
+  ) {
+    const idResult = customerIdParamSchema.safeParse(id);
+    if (!idResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Customer id must be a valid UUID.',
+      });
+    }
+
+    const parsed = ArchiveCustomerSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: parsed.error.issues[0]?.message ?? 'Invalid request body',
+      });
+    }
+
+    try {
+      await this.unarchiveTenantCustomer.execute({
+        tenantId: staff.tenantId,
+        tenantCustomerId: idResult.data,
+        actorId: staff.id,
+        staffContext: toStaffContext(staff),
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+      });
+
+      const full = await this.getTenantCustomer.execute({
+        tenantId: staff.tenantId,
+        tenantCustomerId: idResult.data,
+        staffContext: toStaffContext(staff),
+      });
+
+      return toTenantCustomerDetailResponse(full);
     } catch (error) {
       throw this.toHttpException(error);
     }
@@ -465,31 +1163,139 @@ export class CustomersController {
 
   @Post(':id/restore')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('core.customer.restore')
+  @UseGuards(ModuleGuard)
+  @RequireModule('installments')
+  @RequirePermission('installments.customer.restore')
   async restore(
     @CurrentStaff() staff: StaffContext,
     @Param('id') id: string,
     @Req() request: Request,
   ) {
+    const idResult = customerIdParamSchema.safeParse(id);
+    if (!idResult.success) {
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Customer id must be a valid UUID.',
+      });
+    }
+
     try {
-      return await this.restoreCustomer.execute({
+      const result = await this.restoreTenantCustomer.execute({
         tenantId: staff.tenantId,
-        entityId: id,
+        tenantCustomerId: idResult.data,
         actorId: staff.id,
         ip: request.ip,
         userAgent: request.headers['user-agent'],
       });
+
+      const full = await this.getTenantCustomer.execute({
+        tenantId: staff.tenantId,
+        tenantCustomerId: idResult.data,
+        staffContext: toStaffContext(staff),
+      });
+
+      return {
+        id: result.customer.id,
+        restoredAt: result.restoredAt.toISOString(),
+        customer: toTenantCustomerDetailResponse(full),
+      };
     } catch (error) {
       throw this.toHttpException(error);
     }
   }
 
+  private async assertExportListPermissions(
+    staff: StaffContext,
+    data: { includeArchived?: boolean; linkStatus?: string },
+  ): Promise<void> {
+    const effective = await this.getStaffPermissions.execute({ staffId: staff.id });
+
+    if (
+      data.includeArchived &&
+      !this.getStaffPermissions.hasPermission(effective, 'installments.customer.archive')
+    ) {
+      throw new HttpException(
+        { code: 'PERMISSION_DENIED', message: 'Including archived customers is not permitted.' },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    if (
+      data.linkStatus === 'deleted' &&
+      !this.getStaffPermissions.hasPermission(effective, 'installments.customer.restore')
+    ) {
+      throw new HttpException(
+        { code: 'PERMISSION_DENIED', message: 'Listing deleted customers is not permitted.' },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+  }
+
+  private buildExportInput(
+    staff: StaffContext,
+    req: Request,
+    data: ExportCustomersQueryDto | ExportCustomersRequestDto,
+  ): ExportTenantCustomersInput {
+    const search = 'search' in data && data.search ? data.search : undefined;
+
+    return {
+      tenantId: staff.tenantId,
+      actorId: staff.id,
+      search,
+      filter: data.filter,
+      sort: data.sort,
+      tags: data.tags,
+      status: data.status,
+      branchId: data.branchId,
+      defaultBranchId: data.defaultBranchId,
+      categoryId: data.categoryId,
+      isBlacklisted: data.isBlacklisted,
+      assignedStaffId: data.assignedStaffId,
+      linkStatus: data.linkStatus,
+      createdAtFrom: data.createdAtFrom ? new Date(data.createdAtFrom) : undefined,
+      createdAtTo: data.createdAtTo ? new Date(data.createdAtTo) : undefined,
+      lastPurchaseAtFrom: data.lastPurchaseAtFrom
+        ? new Date(data.lastPurchaseAtFrom)
+        : undefined,
+      lastPurchaseAtTo: data.lastPurchaseAtTo ? new Date(data.lastPurchaseAtTo) : undefined,
+      includeArchived: data.includeArchived,
+      columns: data.columns,
+      ids: data.ids,
+      locale: data.locale,
+      format: data.format,
+      staffContext: toStaffContext(staff),
+      maxRows: this.appConfig.exportMaxRows,
+      pdfMaxRows: this.appConfig.pdfMaxRows,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      filterHashPayload: data,
+    };
+  }
+
+  private sendExportResponse(res: Response, result: ExportTenantCustomersOutput): void {
+    if (result.format === 'pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+      res.setHeader('X-Export-Row-Count', String(result.rowCount));
+      res.send(result.buffer);
+      return;
+    }
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.setHeader('X-Export-Row-Count', String(result.rowCount));
+    result.stream.pipe(res);
+  }
+
   private toHttpException(error: unknown): HttpException {
     if (isMulterFileSizeError(error)) {
-      return new BadRequestException({
-        code: 'VALIDATION_ERROR',
-        message: 'Import file exceeds the 5MB limit.',
-      });
+      return new HttpException(
+        { code: 'FILE_TOO_LARGE', message: 'Import file exceeds the 5MB limit.' },
+        HttpStatus.PAYLOAD_TOO_LARGE,
+      );
     }
 
     if (error instanceof ApplicationError) {

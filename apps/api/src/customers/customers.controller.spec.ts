@@ -1,8 +1,4 @@
-import {
-  ApplicationError,
-  RestoreEntityUseCase,
-  SoftDeleteEntityUseCase,
-} from '@hivork/application';
+import { ApplicationError } from '@hivork/application';
 import { HttpException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -14,9 +10,19 @@ describe('CustomersController', () => {
   const getTenantCustomer = { execute: vi.fn() };
   const updateTenantCustomer = { execute: vi.fn() };
   const importCustomersExcel = { execute: vi.fn() };
-  const softDeleteCustomer = { execute: vi.fn() };
-  const restoreCustomer = { execute: vi.fn() };
+  const softDeleteTenantCustomer = { execute: vi.fn() };
+  const restoreTenantCustomer = { execute: vi.fn() };
+  const archiveTenantCustomer = { execute: vi.fn() };
+  const unarchiveTenantCustomer = { execute: vi.fn() };
   const listDeletedCustomers = { execute: vi.fn() };
+  const bulkTagCustomers = { execute: vi.fn() };
+  const bulkUntagCustomers = { execute: vi.fn() };
+  const getStaffPermissions = {
+    execute: vi.fn().mockResolvedValue(new Set(['installments.customer.create'])),
+    hasPermission: vi.fn((_effective: Set<string>, permission: string) =>
+      permission === 'installments.customer.create' || permission === 'installments.customer.blacklist',
+    ),
+  };
   const exportTenantCustomers = { execute: vi.fn() };
   const appConfig = { exportMaxRows: 50000 };
 
@@ -26,10 +32,15 @@ describe('CustomersController', () => {
     exportTenantCustomers as unknown as never,
     getTenantCustomer as unknown as never,
     updateTenantCustomer as unknown as never,
+    softDeleteTenantCustomer as unknown as never,
+    restoreTenantCustomer as unknown as never,
+    archiveTenantCustomer as unknown as never,
+    unarchiveTenantCustomer as unknown as never,
     importCustomersExcel as unknown as never,
-    softDeleteCustomer as unknown as SoftDeleteEntityUseCase,
-    restoreCustomer as unknown as RestoreEntityUseCase,
     listDeletedCustomers as unknown as never,
+    bulkTagCustomers as unknown as never,
+    bulkUntagCustomers as unknown as never,
+    getStaffPermissions as unknown as never,
     appConfig as never,
   );
 
@@ -102,6 +113,14 @@ describe('CustomersController', () => {
         deleteReason: null,
         version: 1,
         createdById: 'staff-1',
+        categoryId: null,
+        status: 'active',
+        isBlacklisted: false,
+        blacklistReason: null,
+        assignedStaffId: null,
+        addresses: [],
+        emergencyContacts: [],
+        contactPhones: [],
       },
       globalCustomer: {
         id: 'global-1',
@@ -195,6 +214,7 @@ describe('CustomersController', () => {
     importCustomersExcel.execute.mockResolvedValue({
       totalRows: 1,
       successCount: 1,
+      failedCount: 0,
       errorCount: 0,
       errors: [],
     });
@@ -203,6 +223,7 @@ describe('CustomersController', () => {
       staff,
       { buffer: Buffer.from('file') } as Express.Multer.File,
       '00000000-0000-4000-8000-000000000099',
+      {},
       { ip: '127.0.0.1', headers: {} } as never,
     );
 
@@ -210,6 +231,7 @@ describe('CustomersController', () => {
       data: {
         totalRows: 1,
         successCount: 1,
+        failedCount: 0,
         errorCount: 0,
         errors: [],
       },
@@ -217,12 +239,16 @@ describe('CustomersController', () => {
   });
 
   it('maps invalid restore target to 409 NOT_DELETED', async () => {
-    restoreCustomer.execute.mockRejectedValue(
-      new ApplicationError('NOT_DELETED', 'Entity is not deleted.', 409),
+    restoreTenantCustomer.execute.mockRejectedValue(
+      new ApplicationError('NOT_DELETED', 'Customer is not deleted.', 409),
     );
 
     await expect(
-      controller.restore(staff, 'cust-1', { ip: '127.0.0.1', headers: {} } as never),
+      controller.restore(
+        staff,
+        '00000000-0000-4000-8000-000000000001',
+        { ip: '127.0.0.1', headers: {} } as never,
+      ),
     ).rejects.toMatchObject({
       response: { code: 'NOT_DELETED' },
       status: 409,
@@ -230,12 +256,17 @@ describe('CustomersController', () => {
   });
 
   it('maps already deleted to 409 on soft delete', async () => {
-    softDeleteCustomer.execute.mockRejectedValue(
-      new ApplicationError('ALREADY_DELETED', 'Entity is already deleted.', 409),
+    softDeleteTenantCustomer.execute.mockRejectedValue(
+      new ApplicationError('ALREADY_DELETED', 'Customer is already deleted.', 409),
     );
 
     await expect(
-      controller.softDelete(staff, 'cust-1', {}, { ip: '127.0.0.1', headers: {} } as never),
+      controller.softDelete(
+        staff,
+        '00000000-0000-4000-8000-000000000001',
+        {},
+        { ip: '127.0.0.1', headers: {} } as never,
+      ),
     ).rejects.toBeInstanceOf(HttpException);
   });
 });

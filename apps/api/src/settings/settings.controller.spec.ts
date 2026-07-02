@@ -120,6 +120,16 @@ describe('SettingsController', () => {
     ).rejects.toMatchObject({ response: { code: 'SETTING_KEY_UNKNOWN' } });
   });
 
+  it('rejects read-only installments patch key', async () => {
+    await expect(
+      controller.patchInstallmentsSettingsRoute(
+        staff,
+        { contract_number_next_sequence: 99 },
+        { ip: '127.0.0.1', headers: {} } as never,
+      ),
+    ).rejects.toMatchObject({ response: { code: 'READONLY_SETTING_KEY' } });
+  });
+
   it('maps invalid key to 400 for core PUT', async () => {
     updateSettingUseCase.execute.mockRejectedValue(
       new ApplicationError('INVALID_SETTING_KEY', 'Unknown setting key: bad_key', 400),

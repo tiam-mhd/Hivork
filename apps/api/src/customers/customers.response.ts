@@ -1,3 +1,5 @@
+import { maskPhoneForDisplay } from '@hivork/contracts';
+
 import type {
   CreateTenantCustomerOutput,
   GetTenantCustomerOutput,
@@ -23,6 +25,38 @@ export function toTenantCustomerResponse(result: CreateTenantCustomerOutput) {
     totalPurchaseRial: customer.totalPurchaseRial.toString(),
     lastPurchaseAt: customer.lastPurchaseAt?.toISOString() ?? null,
     createdAt: customer.createdAt.toISOString(),
+    categoryId: customer.categoryId,
+    status: customer.status,
+    isBlacklisted: customer.isBlacklisted,
+    blacklistReason: customer.blacklistReason,
+    assignedStaffId: customer.assignedStaffId,
+    addresses: customer.addresses.map((address) => ({
+      id: address.id,
+      label: address.label,
+      line1: address.line1,
+      line2: address.line2,
+      city: address.city,
+      province: address.province,
+      postalCode: address.postalCode,
+      isPrimary: address.isPrimary,
+      latitude: address.latitude,
+      longitude: address.longitude,
+    })),
+    emergencyContacts: customer.emergencyContacts.map((contact) => ({
+      id: contact.id,
+      name: contact.name,
+      phone: contact.phone,
+      relation: contact.relation,
+      isPrimary: contact.isPrimary,
+    })),
+    contactPhones: customer.contactPhones.map((phone) => ({
+      id: phone.id,
+      phone: phone.phone,
+      label: phone.label,
+      isWhatsApp: phone.isWhatsApp,
+      isPrimarySecondary: phone.isPrimarySecondary,
+      notes: phone.notes,
+    })),
     customer: {
       id: globalCustomer.id,
       phone: globalCustomer.phone,
@@ -46,7 +80,10 @@ export function toTenantCustomerListItemResponse(
 ) {
   return {
     id: item.id,
-    globalCustomer: item.globalCustomer,
+    globalCustomer: {
+      ...item.globalCustomer,
+      phoneMasked: maskPhoneForDisplay(item.globalCustomer.phone),
+    },
     localCode: item.localCode,
     tags: item.tags,
     creditScore: item.creditScore,
@@ -54,6 +91,11 @@ export function toTenantCustomerListItemResponse(
     totalPurchaseRial: item.totalPurchaseRial.toString(),
     lastPurchaseAt: item.lastPurchaseAt?.toISOString() ?? null,
     preferredContactChannel: item.preferredContactChannel,
+    categoryId: item.categoryId,
+    categoryName: item.categoryName,
+    primaryAddressCity: item.primaryAddressCity,
+    linkStatus: item.linkStatus,
+    isBlacklisted: item.isBlacklisted,
     createdAt: item.createdAt.toISOString(),
   };
 }
@@ -105,7 +147,9 @@ export function toImportCustomersResponse(result: ImportCustomersExcelOutput) {
   return {
     totalRows: result.totalRows,
     successCount: result.successCount,
-    errorCount: result.errorCount,
+    failedCount: result.failedCount,
+    errorCount: result.failedCount,
     errors: result.errors,
+    ...(result.errorFileBase64 ? { errorFileBase64: result.errorFileBase64 } : {}),
   };
 }

@@ -2,7 +2,7 @@ import {
   ApplicationError,
   CancelSaleUseCase,
   CreateSaleUseCase,
-  GetSaleUseCase,
+  GetSaleEnterpriseUseCase,
   ListSalesUseCase,
 } from '@hivork/application';
 import { HttpException } from '@nestjs/common';
@@ -13,13 +13,13 @@ import { SalesController } from './sales.controller.js';
 describe('SalesController', () => {
   const createSale = { execute: vi.fn() };
   const listSales = { execute: vi.fn() };
-  const getSale = { execute: vi.fn() };
+  const getSaleEnterprise = { execute: vi.fn() };
   const cancelSale = { execute: vi.fn() };
 
   const controller = new SalesController(
     createSale as unknown as CreateSaleUseCase,
     listSales as unknown as ListSalesUseCase,
-    getSale as unknown as GetSaleUseCase,
+    getSaleEnterprise as unknown as GetSaleEnterpriseUseCase,
     cancelSale as unknown as CancelSaleUseCase,
   );
 
@@ -64,7 +64,7 @@ describe('SalesController', () => {
       { ip: '127.0.0.1', headers: {} } as never,
     );
 
-    expect(result.id).toBe('sale-1');
+    expect(result.data?.id).toBe('sale-1');
     expect(createSale.execute).toHaveBeenCalledWith(
       expect.objectContaining({
         tenantId: 'tenant-1',
@@ -105,7 +105,7 @@ describe('SalesController', () => {
   });
 
   it('gets sale by id', async () => {
-    getSale.execute.mockResolvedValue({
+    getSaleEnterprise.execute.mockResolvedValue({
       id: 'sale-1',
       tenantCustomerId: validCreateBody.tenantCustomerId,
       customer: { id: 'gc-1', phone: '09123456789', name: 'علی' },
@@ -115,12 +115,27 @@ describe('SalesController', () => {
       downPaymentRial: '1000000',
       installmentCount: 4,
       status: 'active',
+      contractNumber: null,
+      customTerms: null,
+      signatureStatus: 'unsigned',
+      signedAt: null,
+      insuranceRial: null,
+      insuranceProvider: null,
+      extendedFromSaleId: null,
+      copiedFromSaleId: null,
+      terminatedAt: null,
+      closedAt: null,
+      archivedAt: null,
       installments: [],
       createdAt: '2026-07-01T10:00:00.000Z',
     });
 
-    const result = await controller.getById(staff, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
-    expect(result.customer).toEqual({ id: 'gc-1', phone: '09123456789', name: 'علی' });
+    const result = await controller.getById(
+      staff,
+      'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      {},
+    );
+    expect(result.data.customer).toEqual({ id: 'gc-1', phone: '09123456789', name: 'علی' });
   });
 
   it('cancels sale', async () => {

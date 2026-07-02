@@ -189,8 +189,8 @@ describeIfRuntime('SalesController (integration)', () => {
 
     const detail = await request(`/v1/sales/${saleId}`, { token: accessToken });
     expect(detail.response.status).toBe(200);
-    expect((detail.body as { id: string }).id).toBe(saleId);
-    expect((detail.body as { customer: unknown }).customer).toBeTruthy();
+    expect((detail.body as { data: { id: string } }).data.id).toBe(saleId);
+    expect((detail.body as { data: { customer: unknown } }).data.customer).toBeTruthy();
 
     const cancel = await request(`/v1/sales/${saleId}/cancel`, {
       method: 'POST',

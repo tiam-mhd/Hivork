@@ -147,23 +147,48 @@ describeIfRuntime('SettingsController installments (integration)', () => {
     expect(installments.reminder_time).toBe('09:00');
     expect(installments.default_installment_count).toBe(12);
     expect(installments.default_reminder_channels).toEqual(['telegram']);
+    expect(installments.calculation_formula).toBe('equal_installments');
+    expect(installments.penalty_type).toBe('none');
+    expect(installments.rounding_mode).toBe('nearest');
+    expect(installments.holiday_calendar_source).toBe('merge_official_and_custom');
+    expect(installments.calendar_display_mode).toBe('jalali');
+    expect(installments.calendar_input_mode).toBe('jalali');
+    expect(installments.contract_numbering_enabled).toBe(true);
+    expect(installments.contract_number_prefix).toBe('CTR');
+    expect(installments.contract_number_pad_length).toBe(6);
+    expect(installments.contract_number_include_year).toBe(true);
+    expect(typeof installments.contract_number_next_sequence).toBe('number');
   });
 
-  it('PATCH updates settings and writes audit log', async () => {
+  it('PATCH updates enterprise settings and writes audit log', async () => {
     const patch = await request('/v1/settings/installments', {
       method: 'PATCH',
       token: accessToken,
       body: JSON.stringify({
-        reminder_time: '10:30',
-        default_installment_count: 18,
+        penalty_type: 'percent_daily',
+        penalty_rate_bps: 50,
+        penalty_grace_days: 3,
+        interest_rate_bps_annual: 1800,
+        interest_calculation_method: 'simple',
+        rounding_mode: 'nearest',
+        rounding_unit_rial: '1000',
+        calendar_display_mode: 'jalali',
+        contract_number_prefix: 'CTR',
       }),
     });
 
     expect(patch.response.status).toBe(200);
     const installments = (patch.body as { data: { installments: Record<string, unknown> } }).data
       .installments;
-    expect(installments.reminder_time).toBe('10:30');
-    expect(installments.default_installment_count).toBe(18);
+    expect(installments.penalty_type).toBe('percent_daily');
+    expect(installments.penalty_rate_bps).toBe(50);
+    expect(installments.penalty_grace_days).toBe(3);
+    expect(installments.interest_rate_bps_annual).toBe(1800);
+    expect(installments.interest_calculation_method).toBe('simple');
+    expect(installments.rounding_mode).toBe('nearest');
+    expect(installments.rounding_unit_rial).toBe('1000');
+    expect(installments.calendar_display_mode).toBe('jalali');
+    expect(installments.contract_number_prefix).toBe('CTR');
 
     const auditRows = await audit.find({
       tenantId,
@@ -175,21 +200,21 @@ describeIfRuntime('SettingsController installments (integration)', () => {
     expect(
       auditRows.some(
         (row) =>
-          row.metadata?.key === 'reminder_time' &&
+          row.metadata?.key === 'penalty_type' &&
           row.newValue &&
           typeof row.newValue === 'object' &&
-          'reminder_time' in row.newValue &&
-          row.newValue.reminder_time === '10:30',
+          'penalty_type' in row.newValue &&
+          row.newValue.penalty_type === 'percent_daily',
       ),
     ).toBe(true);
     expect(
       auditRows.some(
         (row) =>
-          row.metadata?.key === 'default_installment_count' &&
+          row.metadata?.key === 'penalty_rate_bps' &&
           row.newValue &&
           typeof row.newValue === 'object' &&
-          'default_installment_count' in row.newValue &&
-          row.newValue.default_installment_count === 18,
+          'penalty_rate_bps' in row.newValue &&
+          row.newValue.penalty_rate_bps === 50,
       ),
     ).toBe(true);
 
@@ -197,10 +222,33 @@ describeIfRuntime('SettingsController installments (integration)', () => {
       where: {
         tenantId,
         module: 'installments',
-        key: { in: ['reminder_time', 'default_installment_count'] },
+        key: {
+          in: [
+            'penalty_type',
+            'penalty_rate_bps',
+            'penalty_grace_days',
+            'interest_rate_bps_annual',
+            'interest_calculation_method',
+            'rounding_mode',
+            'rounding_unit_rial',
+            'calendar_display_mode',
+            'contract_number_prefix',
+          ],
+        },
       },
       data: { deletedAt: new Date() },
     });
+  });
+
+  it('rejects read-only contract_number_next_sequence patch', async () => {
+    const invalid = await request('/v1/settings/installments', {
+      method: 'PATCH',
+      token: accessToken,
+      body: JSON.stringify({ contract_number_next_sequence: 99 }),
+    });
+
+    expect(invalid.response.status).toBe(400);
+    expect((invalid.body as { code: string }).code).toBe('READONLY_SETTING_KEY');
   });
 
   it('rejects unknown patch key', async () => {

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const DEV_MFA_ENCRYPTION_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   API_PORT: z.coerce.number().int().positive().default(4000),
@@ -12,7 +14,7 @@ export const envSchema = z.object({
   JWT_REFRESH_SESSION_TTL: z.string().default('24h'),
   OTP_TTL_SECONDS: z.coerce.number().int().positive().default(120),
   OTP_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(3),
-  MFA_ENCRYPTION_KEY: z.string().min(1),
+  MFA_ENCRYPTION_KEY: z.string().min(1).optional(),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('debug'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
   CAPTCHA_ENABLED: z
@@ -27,12 +29,25 @@ export const envSchema = z.object({
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(1),
   EXPORT_MAX_ROWS: z.coerce.number().int().positive().default(50_000),
   PDF_MAX_ROWS: z.coerce.number().int().positive().default(500),
+  FILE_STORAGE_PATH: z.string().default('./data/file-storage'),
+  FILE_STORAGE_SIGNING_SECRET: z.string().min(32).optional(),
+  API_PUBLIC_URL: z.string().url().default('http://localhost:4000'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
 
 export function validateEnv(config: Record<string, unknown>): EnvConfig {
-  const parsed = envSchema.safeParse(config);
+  const normalized = {
+    ...config,
+    MFA_ENCRYPTION_KEY:
+      typeof config.MFA_ENCRYPTION_KEY === 'string' && config.MFA_ENCRYPTION_KEY.trim().length > 0
+        ? config.MFA_ENCRYPTION_KEY
+        : config.NODE_ENV === 'production'
+          ? config.MFA_ENCRYPTION_KEY
+          : DEV_MFA_ENCRYPTION_KEY,
+  };
+
+  const parsed = envSchema.safeParse(normalized);
   if (!parsed.success) {
     const message = parsed.error.issues
       .map((issue) => `${issue.path.join('.')}: ${issue.message}`)

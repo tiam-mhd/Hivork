@@ -5,7 +5,10 @@ import {
   UpdateInstallmentSettingsUseCase,
   UpdateSettingUseCase,
 } from '@hivork/application';
-import { UpdateInstallmentsSettingsSchema } from '@hivork/contracts/installments';
+import {
+  READONLY_INSTALLMENTS_SETTING_KEYS,
+  UpdateInstallmentsSettingsSchema,
+} from '@hivork/contracts/installments';
 import { GetSettingsQuerySchema, UpdateSettingBodySchema } from '@hivork/contracts/settings';
 import { RequireModule } from '@hivork/module-core';
 import { PrismaModuleEntitlement } from '@hivork/infrastructure';
@@ -48,7 +51,7 @@ export class SettingsController {
   @Get('installments')
   @UseGuards(ModuleGuard)
   @RequireModule('installments')
-  @RequirePermission('installments.reminder.configure')
+  @RequirePermission('core.settings.view')
   async getInstallmentsSettingsRoute(@CurrentStaff() staff: StaffContext) {
     return this.getInstallmentsSettings(staff);
   }
@@ -57,7 +60,7 @@ export class SettingsController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(ModuleGuard)
   @RequireModule('installments')
-  @RequirePermission('installments.reminder.configure')
+  @RequirePermission('core.settings.edit')
   async patchInstallmentsSettingsRoute(
     @CurrentStaff() staff: StaffContext,
     @Body() body: unknown,
@@ -180,6 +183,15 @@ export class SettingsController {
         code: 'VALIDATION_ERROR',
         message: 'Patch body must include at least one setting key.',
       });
+    }
+
+    for (const key of READONLY_INSTALLMENTS_SETTING_KEYS) {
+      if (key in body) {
+        throw new BadRequestException({
+          code: 'READONLY_SETTING_KEY',
+          message: `Setting key "${key}" is read-only and cannot be patched.`,
+        });
+      }
     }
 
     const parsedBody = UpdateInstallmentsSettingsSchema.safeParse(body);

@@ -137,6 +137,24 @@ describeIfRuntime('CustomersController (integration)', () => {
     return { response, body };
   }
 
+  async function requestBinary(path: string, init?: RequestInit & { token?: string }) {
+    const headers = new Headers(init?.headers);
+    if (init?.body && !(init.body instanceof FormData)) {
+      headers.set('Content-Type', 'application/json');
+    }
+    if (init?.token) {
+      headers.set('Authorization', `Bearer ${init.token}`);
+    }
+
+    const response = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers,
+    });
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return { response, buffer };
+  }
+
   it('runs full customer CRUD flow', async () => {
     const phoneSuffix = String(Date.now()).slice(-7);
     const phone = `0915${phoneSuffix}`;
@@ -245,6 +263,156 @@ describeIfRuntime('CustomersController (integration)', () => {
 
     expect(missingKey.response.status).toBe(400);
     expect((missingKey.body as { code: string }).code).toBe('VALIDATION_ERROR');
+  });
+
+  it('exports customers as xlsx matching list filter row count', async () => {
+    const suffix = String(Date.now()).slice(-7);
+    const phones = [`0919${suffix}`, `0920${suffix}`, `0921${suffix}`];
+    const fileBuffer = await buildImportWorkbook(phones);
+    const form = new FormData();
+    form.append('file', new Blob([fileBuffer]), 'customers.xlsx');
+
+    const imported = await request('/v1/customers/import', {
+      method: 'POST',
+      token: accessToken,
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      body: form,
+    });
+    expect(imported.response.status).toBe(200);
+    expect((imported.body as { data: { successCount: number } }).data.successCount).toBe(3);
+
+    const search = phones[0].slice(0, 8);
+    const list = await request(`/v1/customers?search=${search}`, { token: accessToken });
+    expect(list.response.status).toBe(200);
+    const listCount = (list.body as { data: unknown[] }).data.length;
+    expect(listCount).toBe(3);
+
+    const exported = await requestBinary(
+      `/v1/customers/export?format=xlsx&search=${encodeURIComponent(search)}`,
+      { token: accessToken },
+    );
+
+    expect(exported.response.status).toBe(200);
+    expect(exported.response.headers.get('content-type')).toContain('spreadsheetml');
+    expect(exported.response.headers.get('x-export-row-count')).toBe(String(listCount));
+    expect(exported.response.headers.get('content-disposition')).toMatch(
+      /^attachment; filename="customers-\d{4}-\d{2}-\d{2}\.xlsx"$/,
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(exported.buffer);
+    const sheet = workbook.worksheets[0];
+    expect(sheet).toBeTruthy();
+    const dataRowCount = Math.max(0, (sheet?.rowCount ?? 0) - 1);
+    expect(dataRowCount).toBe(listCount);
+  });
+
+  it('exports customers as pdf with valid buffer', async () => {
+    const exported = await requestBinary('/v1/customers/export?format=pdf&limit=5', {
+      token: accessToken,
+    });
+
+    expect(exported.response.status).toBe(200);
+    expect(exported.response.headers.get('content-type')).toBe('application/pdf');
+    expect(exported.response.headers.get('content-disposition')).toMatch(
+      /^attachment; filename="customers-\d{4}-\d{2}-\d{2}\.pdf"$/,
+    );
+    expect(exported.buffer.subarray(0, 5).toString('utf8')).toBe('%PDF-');
+  });
+
+  it('uploads, lists, downloads, and soft-deletes customer documents', async () => {
+    const phoneSuffix = String(Date.now()).slice(-7);
+    const phone = `0922${phoneSuffix}`;
+
+    const create = await request('/v1/customers', {
+      method: 'POST',
+      token: accessToken,
+      body: JSON.stringify({
+        phone,
+        name: 'مشتری با سند',
+        localCode: `DOC-${phoneSuffix}`,
+      }),
+    });
+    expect(create.response.status).toBe(201);
+    const customerId = (create.body as { id: string }).id;
+
+    const jpegBuffer = Buffer.from([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9,
+    ]);
+    const form = new FormData();
+    form.append('file', new Blob([jpegBuffer], { type: 'image/jpeg' }), 'national-id.jpg');
+    form.append('documentType', 'national_id');
+    form.append('description', 'کارت ملی');
+
+    const uploaded = await request(`/v1/customers/${customerId}/documents`, {
+      method: 'POST',
+      token: accessToken,
+      body: form,
+    });
+    expect(uploaded.response.status).toBe(201);
+    const documentId = (uploaded.body as { data: { id: string } }).data.id;
+
+    const list = await request(`/v1/customers/${customerId}/documents`, { token: accessToken });
+    expect(list.response.status).toBe(200);
+    expect((list.body as { data: Array<{ id: string }> }).data).toHaveLength(1);
+    expect((list.body as { data: Array<{ id: string }> }).data[0]?.id).toBe(documentId);
+
+    const download = await request(
+      `/v1/customers/${customerId}/documents/${documentId}/download`,
+      { token: accessToken },
+    );
+    expect(download.response.status).toBe(200);
+    expect((download.body as { data: { url: string } }).data.url).toContain('/api/v1/files/signed-download');
+
+    const removed = await request(`/v1/customers/${customerId}/documents/${documentId}`, {
+      method: 'DELETE',
+      token: accessToken,
+      body: JSON.stringify({ deleteReason: 'test cleanup' }),
+    });
+    expect(removed.response.status).toBe(200);
+
+    const listAfterDelete = await request(`/v1/customers/${customerId}/documents`, {
+      token: accessToken,
+    });
+    expect(listAfterDelete.response.status).toBe(200);
+    expect((listAfterDelete.body as { data: unknown[] }).data).toHaveLength(0);
+  });
+
+  it('rejects unsupported customer document mime type', async () => {
+    const phoneSuffix = String(Date.now()).slice(-7);
+    const phone = `0923${phoneSuffix}`;
+
+    const create = await request('/v1/customers', {
+      method: 'POST',
+      token: accessToken,
+      body: JSON.stringify({ phone, name: 'مشتری سند نامعتبر' }),
+    });
+    const customerId = (create.body as { id: string }).id;
+
+    const form = new FormData();
+    form.append('file', new Blob(['plain-text'], { type: 'text/plain' }), 'notes.txt');
+    form.append('documentType', 'other');
+
+    const uploaded = await request(`/v1/customers/${customerId}/documents`, {
+      method: 'POST',
+      token: accessToken,
+      body: form,
+    });
+
+    expect(uploaded.response.status).toBe(422);
+    expect((uploaded.body as { code: string }).code).toBe('UNSUPPORTED_FILE_TYPE');
+  });
+
+  it('requires auth for customer document upload', async () => {
+    const form = new FormData();
+    form.append('file', new Blob([Buffer.from([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' }), 'a.jpg');
+    form.append('documentType', 'photo');
+
+    const unauthorized = await request(
+      '/v1/customers/00000000-0000-4000-8000-000000000001/documents',
+      { method: 'POST', body: form },
+    );
+    expect(unauthorized.response.status).toBe(401);
   });
 });
 

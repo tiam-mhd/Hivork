@@ -290,6 +290,155 @@ describeIfRuntime('Phase 1 RBAC integration', () => {
     expect(result.response.status).toBe(401);
     expect((result.body as { code: string }).code).toBe('UNAUTHORIZED');
   });
+
+  describe('enterprise contract lifecycle (IFP-064)', () => {
+    const fakeSaleId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
+    function branchHeaders(branchId: string): HeadersInit {
+      return { 'X-Branch-Id': branchId };
+    }
+
+    it('viewer cannot terminate sale → 403 PERMISSION_DENIED', async () => {
+      const result = await request(`/v1/sales/${fakeSaleId}/terminate`, {
+        method: 'POST',
+        token: tokenFor(seed.viewer),
+        headers: branchHeaders(seed.branchA.id),
+        body: JSON.stringify({ reason: 'تلاش فسخ بدون مجوز' }),
+      });
+
+      expect(result.response.status).toBe(403);
+      expect((result.body as { code: string }).code).toBe('PERMISSION_DENIED');
+    });
+
+    it('viewer cannot extend sale → 403 PERMISSION_DENIED', async () => {
+      const result = await request(`/v1/sales/${fakeSaleId}/extend`, {
+        method: 'POST',
+        token: tokenFor(seed.viewer),
+        headers: {
+          ...branchHeaders(seed.branchA.id),
+          'X-Sale-Version': '1',
+        },
+        body: JSON.stringify({
+          newLastDueDate: futureDateOnly(120),
+          additionalInstallmentCount: 1,
+          reason: 'تلاش تمدید بدون مجوز',
+        }),
+      });
+
+      expect(result.response.status).toBe(403);
+      expect((result.body as { code: string }).code).toBe('PERMISSION_DENIED');
+    });
+
+    it('viewer cannot copy sale → 403 PERMISSION_DENIED', async () => {
+      const result = await request(`/v1/sales/${fakeSaleId}/copy`, {
+        method: 'POST',
+        token: tokenFor(seed.viewer),
+        headers: branchHeaders(seed.branchA.id),
+        body: JSON.stringify({
+          tenantCustomerId: seed.customerId,
+          branchId: seed.branchA.id,
+          contractDate: futureDateOnly(30),
+          firstDueDate: futureDateOnly(45),
+          reason: 'تلاش کپی بدون مجوز',
+        }),
+      });
+
+      expect(result.response.status).toBe(403);
+      expect((result.body as { code: string }).code).toBe('PERMISSION_DENIED');
+    });
+
+    it('viewer cannot close sale → 403 PERMISSION_DENIED', async () => {
+      const result = await request(`/v1/sales/${fakeSaleId}/close`, {
+        method: 'POST',
+        token: tokenFor(seed.viewer),
+        headers: branchHeaders(seed.branchA.id),
+        body: JSON.stringify({ reason: 'تلاش بستن بدون مجوز' }),
+      });
+
+      expect(result.response.status).toBe(403);
+      expect((result.body as { code: string }).code).toBe('PERMISSION_DENIED');
+    });
+
+    it('viewer cannot archive sale → 403 PERMISSION_DENIED', async () => {
+      const result = await request(`/v1/sales/${fakeSaleId}/archive`, {
+        method: 'POST',
+        token: tokenFor(seed.viewer),
+        headers: branchHeaders(seed.branchA.id),
+        body: JSON.stringify({ reason: 'تلاش بایگانی بدون مجوز' }),
+      });
+
+      expect(result.response.status).toBe(403);
+      expect((result.body as { code: string }).code).toBe('PERMISSION_DENIED');
+    });
+
+    it('viewer with sale.view can list contract versions → 200', async () => {
+      const created = await postSale(seed.owner);
+      expect(created.response.status).toBe(201);
+      const saleId = (created.body as { id: string }).id;
+
+      const result = await request(`/v1/sales/${saleId}/versions`, {
+        token: tokenFor(seed.viewer),
+      });
+
+      expect(result.response.status).toBe(200);
+      expect(Array.isArray((result.body as { data: unknown[] }).data)).toBe(true);
+    });
+
+    it('owner can terminate an active sale → 200', async () => {
+      const created = await postSale(seed.owner);
+      expect(created.response.status).toBe(201);
+      const saleId = (created.body as { id: string }).id;
+
+      const result = await request(`/v1/sales/${saleId}/terminate`, {
+        method: 'POST',
+        token: tokenFor(seed.owner),
+        headers: branchHeaders(seed.branchA.id),
+        body: JSON.stringify({ reason: 'فسخ تست RBAC' }),
+      });
+
+      expect(result.response.status).toBe(200);
+      expect((result.body as { data: { status: string } }).data.status).toBe('terminated');
+    });
+
+    it('viewer cannot create guarantor → 403 PERMISSION_DENIED', async () => {
+      const created = await postSale(seed.owner);
+      expect(created.response.status).toBe(201);
+      const saleId = (created.body as { id: string }).id;
+
+      const result = await request(`/v1/sales/${saleId}/guarantors`, {
+        method: 'POST',
+        token: tokenFor(seed.viewer),
+        headers: branchHeaders(seed.branchA.id),
+        body: JSON.stringify({
+          fullName: 'ضامن بدون مجوز',
+          phone: '09121112233',
+          relationship: 'other',
+        }),
+      });
+
+      expect(result.response.status).toBe(403);
+      expect((result.body as { code: string }).code).toBe('PERMISSION_DENIED');
+    });
+
+    it('viewer cannot bulk upsert line items → 403 PERMISSION_DENIED', async () => {
+      const created = await postSale(seed.owner);
+      expect(created.response.status).toBe(201);
+      const saleId = (created.body as { id: string }).id;
+
+      const result = await request(`/v1/sales/${saleId}/line-items`, {
+        method: 'PUT',
+        token: tokenFor(seed.viewer),
+        headers: branchHeaders(seed.branchA.id),
+        body: JSON.stringify({
+          expectedVersion: 1,
+          items: [{ title: 'Unauthorized line', unitPriceRial: '1000000' }],
+        }),
+      });
+
+      expect(result.response.status).toBe(403);
+      expect((result.body as { code: string }).code).toBe('PERMISSION_DENIED');
+    });
+  });
 });
 
 async function createApp() {

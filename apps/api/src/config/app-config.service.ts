@@ -101,4 +101,18 @@ export class AppConfigService {
   get pdfMaxRows(): number {
     return this.config.get('PDF_MAX_ROWS', { infer: true });
   }
+
+  get fileStoragePath(): string {
+    return this.config.get('FILE_STORAGE_PATH', { infer: true });
+  }
+
+  get fileStorageSigningSecret(): string {
+    return (
+      this.config.get('FILE_STORAGE_SIGNING_SECRET', { infer: true }) ?? this.jwtAccessSecret
+    );
+  }
+
+  get publicApiBaseUrl(): string {
+    return this.config.get('API_PUBLIC_URL', { infer: true });
+  }
 }

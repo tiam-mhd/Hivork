@@ -13,7 +13,7 @@ export default defineConfig({
     }),
   ],
   test: {
-    include: ['src/**/*.spec.ts'],
+    include: ['src/**/*.spec.ts', 'test/**/*.spec.ts'],
     setupFiles: ['./vitest.setup.ts'],
     /** Integration specs share Redis OTP keys (demo owner phone) — run files sequentially */
     fileParallelism: false,

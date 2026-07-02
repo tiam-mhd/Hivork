@@ -2,7 +2,7 @@ import {
   ApplicationError,
   CancelSaleUseCase,
   CreateSaleUseCase,
-  GetSaleUseCase,
+  GetSaleEnterpriseUseCase,
   ListSalesUseCase,
 } from '@hivork/application';
 import {
@@ -41,20 +41,12 @@ import {
   parseDateOnlyUtcEnd,
   toCancelSaleResponse,
   toSaleDetailResponse,
+  toSaleEnterpriseDetailResponse,
   toSaleSummaryResponse,
 } from './sales.response.js';
+import { parseSaleId, toStaffContext } from './sales.controller.helpers.js';
 
-const saleIdParamSchema = z.string().uuid();
 const idempotencyKeySchema = z.string().uuid();
-
-function toStaffContext(staff: StaffContext) {
-  return {
-    staffId: staff.id,
-    dataScope: staff.dataScope,
-    assignedBranchIds: staff.assignedBranchIds,
-    activeBranchId: staff.activeBranchId,
-  };
-}
 
 /**
  * Installments sales API — create, list, detail, cancel.
@@ -66,7 +58,7 @@ export class SalesController {
   constructor(
     private readonly createSale: CreateSaleUseCase,
     private readonly listSales: ListSalesUseCase,
-    private readonly getSale: GetSaleUseCase,
+    private readonly getSaleEnterprise: GetSaleEnterpriseUseCase,
     private readonly cancelSale: CancelSaleUseCase,
   ) {}
 
@@ -126,7 +118,7 @@ export class SalesController {
         userAgent: request.headers['user-agent'],
       });
 
-      return toSaleDetailResponse(detail);
+      return { data: toSaleDetailResponse(detail) };
     } catch (error) {
       throw this.toHttpException(error);
     }
@@ -165,6 +157,9 @@ export class SalesController {
         search: parsed.data.search,
         from: parsed.data.from ? parseDateOnlyUtc(parsed.data.from) : undefined,
         to: parsed.data.to ? parseDateOnlyUtcEnd(parsed.data.to) : undefined,
+        includeArchived: parsed.data.includeArchived,
+        includeDeleted: parsed.data.includeDeleted,
+        contractNumber: parsed.data.contractNumber,
         activeBranchId: staff.activeBranchId ?? undefined,
       });
 
@@ -186,24 +181,34 @@ export class SalesController {
   @RequireModule('installments')
   @RequirePermission('installments.sale.view')
   @ApplyDataScope()
-  async getById(@CurrentStaff() staff: StaffContext, @Param('id') id: string) {
-    const parsedId = saleIdParamSchema.safeParse(id);
-    if (!parsedId.success) {
-      throw new BadRequestException({
-        code: 'VALIDATION_ERROR',
-        message: 'Sale id must be a valid UUID.',
-      });
-    }
+  async getById(
+    @CurrentStaff() staff: StaffContext,
+    @Param('id') id: string,
+    @Query() query: unknown,
+  ) {
+    const saleId = parseSaleId(id);
+    const includeVersions =
+      typeof query === 'object' &&
+      query !== null &&
+      'includeVersions' in query &&
+      String((query as Record<string, unknown>).includeVersions) === 'true';
+    const includeAttachments =
+      typeof query === 'object' &&
+      query !== null &&
+      'includeAttachments' in query &&
+      String((query as Record<string, unknown>).includeAttachments) === 'true';
 
     try {
-      const detail = await this.getSale.execute({
+      const detail = await this.getSaleEnterprise.execute({
         tenantId: staff.tenantId,
         actorId: staff.id,
-        saleId: parsedId.data,
+        saleId,
         staffContext: toStaffContext(staff),
+        includeVersions,
+        includeAttachments,
       });
 
-      return toSaleDetailResponse(detail);
+      return { data: toSaleEnterpriseDetailResponse(detail) };
     } catch (error) {
       throw this.toHttpException(error);
     }
@@ -222,14 +227,7 @@ export class SalesController {
     @Body() body: unknown,
     @Req() request: Request,
   ) {
-    const parsedId = saleIdParamSchema.safeParse(id);
-    if (!parsedId.success) {
-      throw new BadRequestException({
-        code: 'VALIDATION_ERROR',
-        message: 'Sale id must be a valid UUID.',
-      });
-    }
-
+    const saleId = parseSaleId(id);
     const parsedBody = CancelSaleSchema.safeParse(body);
     if (!parsedBody.success) {
       throw new BadRequestException({
@@ -242,7 +240,7 @@ export class SalesController {
       const result = await this.cancelSale.execute({
         tenantId: staff.tenantId,
         actorId: staff.id,
-        saleId: parsedId.data,
+        saleId,
         reason: parsedBody.data.reason,
         staffContext: toStaffContext(staff),
         ip: request.ip,

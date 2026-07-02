@@ -13,7 +13,7 @@ import { Request } from 'express';
 
 import { STAFF_CONTEXT_KEY } from '../constants/auth.constants.js';
 import type { StaffContext } from '../types/auth-context.js';
-import { extractBearerToken, readBranchHeader } from '../utils/auth-request.util.js';
+import { extractAccessToken, readBranchHeader } from '../utils/auth-request.util.js';
 
 @Injectable()
 export class StaffAuthGuard implements CanActivate {
@@ -25,7 +25,7 @@ export class StaffAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    const token = extractBearerToken(request);
+    const token = extractAccessToken(request);
     if (!token) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
