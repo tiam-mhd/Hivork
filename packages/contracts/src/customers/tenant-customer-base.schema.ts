@@ -14,6 +14,10 @@ export const TenantCustomerStatusSchema = z.enum(['active', 'suspended']);
 
 export type TenantCustomerStatusDto = z.infer<typeof TenantCustomerStatusSchema>;
 
+export const TenantCustomerLinkStatusSchema = z.enum(['active', 'archived', 'blacklisted']);
+
+export type TenantCustomerLinkStatusDto = z.infer<typeof TenantCustomerLinkStatusSchema>;
+
 export const GlobalCustomerEmbedSchema = z.object({
   id: z.string().uuid(),
   phone: phoneSchema,

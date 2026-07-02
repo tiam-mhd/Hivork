@@ -10,6 +10,15 @@ export function normalizePhone(input: string): string {
   return d;
 }
 
+/** Mask Iranian mobile for list display: 0912***4567 */
+export function maskPhoneForDisplay(phone: string): string {
+  if (!IRAN_MOBILE_PATTERN.test(phone)) {
+    return phone;
+  }
+
+  return `${phone.slice(0, 4)}***${phone.slice(-4)}`;
+}
+
 export const phoneSchema = z.string().transform((input, ctx) => {
   try {
     return normalizePhone(input);

@@ -116,6 +116,9 @@ export const ThemePreviewSchema = z.object({
 
 export const ThemeColorModeSchema = z.enum(['light', 'dark']);
 
+/** User preference — `system` follows OS via `prefers-color-scheme` */
+export const ThemeModePreferenceSchema = z.enum(['light', 'dark', 'system']);
+
 export const FormControlTokensSchema = z.object({
   background: HslColorTokenSchema,
   foreground: HslColorTokenSchema,
@@ -225,6 +228,7 @@ export type LayoutBannerTokens = z.infer<typeof LayoutBannerTokensSchema>;
 export type LayoutTokens = z.infer<typeof LayoutTokensSchema>;
 export type ThemePreview = z.infer<typeof ThemePreviewSchema>;
 export type ThemeColorMode = z.infer<typeof ThemeColorModeSchema>;
+export type ThemeModePreference = z.infer<typeof ThemeModePreferenceSchema>;
 export type FormControlTokens = z.infer<typeof FormControlTokensSchema>;
 export type ThemeModeTokens = z.infer<typeof ThemeModeTokensSchema>;
 export type TypographyTokens = z.infer<typeof TypographyTokensSchema>;

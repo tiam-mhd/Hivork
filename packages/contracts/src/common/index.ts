@@ -11,7 +11,7 @@ export {
   type CursorPagination,
   type PaginationQuery,
 } from './pagination.schema.js';
-export { normalizePhone, phoneSchema } from './phone.schema.js';
+export { normalizePhone, maskPhoneForDisplay, phoneSchema } from './phone.schema.js';
 export {
   bigintRialNonNegativeSchema,
   bigintRialNonNegativeTransformSchema,

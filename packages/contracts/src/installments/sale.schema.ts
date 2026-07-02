@@ -76,7 +76,9 @@ const saleStatusListSchema = z.preprocess(
 
     return value;
   },
-  z.array(z.enum(['active', 'completed', 'cancelled'])).min(1).optional(),
+  z.array(
+    z.enum(['active', 'completed', 'cancelled', 'terminated', 'closed', 'archived']),
+  ).min(1).optional(),
 );
 
 export const ListSalesQuerySchema = z.object({
@@ -90,6 +92,9 @@ export const ListSalesQuerySchema = z.object({
   search: z.string().trim().max(100).optional(),
   from: dateOnlySchema.optional(),
   to: dateOnlySchema.optional(),
+  includeArchived: z.coerce.boolean().optional(),
+  includeDeleted: z.coerce.boolean().optional(),
+  contractNumber: z.string().trim().max(50).optional(),
 });
 
 export type ListSalesQueryDto = z.infer<typeof ListSalesQuerySchema>;

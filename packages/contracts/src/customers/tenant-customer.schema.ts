@@ -1,47 +1,60 @@
 import { z } from 'zod';
 
-import { bigintRialNonNegativeSchema, dateOnlySchema } from '../common/money.schema.js';
-import { phoneSchema } from '../common/phone.schema.js';
+import { bigintRialNonNegativeSchema } from '../common/money.schema.js';
 import {
   GlobalCustomerEmbedSchema,
   PreferredContactChannelSchema,
   TenantCustomerGenderSchema,
+  TenantCustomerLinkStatusSchema,
   TenantCustomerStatusSchema,
 } from './tenant-customer-base.schema.js';
+
+export {
+  CustomerAddressInputSchema,
+  CustomerAddressSchema,
+  CustomerAddressLabelSchema,
+  type CustomerAddressInputDto,
+  type CustomerAddressDto,
+  type CustomerAddressLabelDto,
+} from './customer-address.schema.js';
+
+export {
+  CustomerEmergencyContactInputSchema,
+  EmergencyContactSchema,
+  EmergencyContactRelationSchema,
+  type CustomerEmergencyContactInputDto,
+  type EmergencyContactDto,
+  type EmergencyContactRelationDto,
+} from './customer-emergency-contact.schema.js';
+
+export {
+  CustomerContactPhoneInputSchema,
+  ContactPhoneSchema,
+  CustomerContactPhoneLabelSchema,
+  type CustomerContactPhoneInputDto,
+  type ContactPhoneDto,
+  type CustomerContactPhoneLabelDto,
+} from './customer-contact-phone.schema.js';
+
+export {
+  CreateTenantCustomerEnterpriseFieldsSchema,
+  type CreateTenantCustomerEnterpriseFieldsDto,
+} from './customer-enterprise.schema.js';
 
 export {
   GlobalCustomerEmbedSchema,
   PreferredContactChannelSchema,
   TenantCustomerGenderSchema,
   TenantCustomerStatusSchema,
+  TenantCustomerLinkStatusSchema,
   type GlobalCustomerEmbedDto,
   type PreferredContactChannelDto,
   type TenantCustomerGenderDto,
   type TenantCustomerStatusDto,
+  type TenantCustomerLinkStatusDto,
 } from './tenant-customer-base.schema.js';
 
-export const CreateTenantCustomerSchema = z.object({
-  phone: phoneSchema,
-  name: z.string().trim().min(1).max(200).optional(),
-  email: z.string().trim().email().optional(),
-  nationalId: z
-    .string()
-    .trim()
-    .regex(/^\d{10}$/)
-    .optional(),
-  birthDate: dateOnlySchema.optional(),
-  gender: TenantCustomerGenderSchema.optional(),
-  address: z.string().trim().max(500).optional(),
-  localCode: z.string().trim().max(50).optional(),
-  tags: z.array(z.string().trim().max(30)).max(20).optional(),
-  notes: z.string().trim().max(2000).optional(),
-  internalNotes: z.string().trim().max(2000).optional(),
-  defaultBranchId: z.string().uuid().optional(),
-  preferredContactChannel: PreferredContactChannelSchema.optional(),
-  marketingOptIn: z.boolean().optional(),
-});
-
-export type CreateTenantCustomerDto = z.infer<typeof CreateTenantCustomerSchema>;
+export { CreateTenantCustomerSchema, type CreateTenantCustomerDto } from './create-tenant-customer.schema.js';
 
 export { UpdateTenantCustomerSchema, type UpdateTenantCustomerDto } from './update-tenant-customer.schema.js';
 
@@ -49,25 +62,31 @@ export {
   ImportCustomerErrorSchema,
   ImportCustomerRowErrorCodeSchema,
   ImportCustomersResultSchema,
+  ImportCustomersQuerySchema,
   type ImportCustomerErrorDto,
   type ImportCustomerRowErrorCodeDto,
   type ImportCustomersResultDto,
+  type ImportCustomersQueryDto,
 } from './import-customers.schema.js';
 
 export {
   ListCustomersQuerySchema,
   CustomerListQuerySchema,
   ExportCustomersRequestSchema,
+  ExportCustomersQuerySchema,
   TenantCustomerListSortSchema,
   TenantCustomerListItemSchema,
   TenantCustomerListResponseSchema,
+  TenantCustomerListLinkStatusFilterSchema,
   type ListCustomersQueryDto,
   type CustomerListQueryDto,
   type ExportCustomersRequestDto,
+  type ExportCustomersQueryDto,
   type TenantCustomerListSortDto,
   type TenantCustomerListItemDto,
   type TenantCustomerListResponseDto,
-} from './customer-list.schema.js';
+  type TenantCustomerListLinkStatusFilterDto,
+} from './list-customers-query.schema.js';
 
 export const TenantCustomerSummarySchema = z.object({
   id: z.string().uuid(),
@@ -80,6 +99,7 @@ export const TenantCustomerSummarySchema = z.object({
   lastPurchaseAt: z.string().datetime().nullable().optional(),
   preferredContactChannel: PreferredContactChannelSchema.nullable().optional(),
   defaultBranchId: z.string().uuid().nullable().optional(),
+  linkStatus: TenantCustomerLinkStatusSchema.optional(),
   status: TenantCustomerStatusSchema.optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime().optional(),
@@ -96,21 +116,7 @@ export const SalesSummaryEmbedSchema = z.object({
 
 export type SalesSummaryEmbedDto = z.infer<typeof SalesSummaryEmbedSchema>;
 
-export const TenantCustomerDetailSchema = TenantCustomerSummarySchema.extend({
-  email: z.string().nullable().optional(),
-  nationalId: z.string().nullable().optional(),
-  birthDate: z.string().nullable().optional(),
-  gender: TenantCustomerGenderSchema.nullable().optional(),
-  address: z.string().nullable().optional(),
-  notes: z.string().nullable().optional(),
-  internalNotes: z.string().nullable().optional(),
-  marketingOptIn: z.boolean().optional(),
-  salesSummary: SalesSummaryEmbedSchema.optional(),
-});
-
-export type TenantCustomerDetailDto = z.infer<typeof TenantCustomerDetailSchema>;
-
-/** @deprecated Phase 0 list item — use `TenantCustomerListItemSchema` from customer-list.schema */
+/** @deprecated Phase 0 list item — use `TenantCustomerListItemSchema` from list-customers-query.schema */
 export const LegacyCustomerListItemSchema = z.object({
   id: z.string().uuid(),
   localCode: z.string().nullable(),
@@ -131,7 +137,7 @@ export const CustomerListResponseSchema = z.object({
 
 export type CustomerListResponseDto = z.infer<typeof CustomerListResponseSchema>;
 
-/** Full create/get response — Phase 0 shape with nested `customer` */
+/** Full create/get response — enterprise shape with nested `customer` */
 export const TenantCustomerResponseSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),
@@ -150,6 +156,51 @@ export const TenantCustomerResponseSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime().optional(),
   version: z.number().int().positive().optional(),
+  categoryId: z.string().uuid().nullable().optional(),
+  linkStatus: TenantCustomerLinkStatusSchema.optional(),
+  status: TenantCustomerLinkStatusSchema.optional(),
+  isBlacklisted: z.boolean().optional(),
+  blacklistReason: z.string().nullable().optional(),
+  assignedStaffId: z.string().uuid().nullable().optional(),
+  addresses: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        label: z.enum(['home', 'work', 'billing', 'other']).optional(),
+        line1: z.string(),
+        line2: z.string().nullable().optional(),
+        city: z.string().nullable().optional(),
+        province: z.string().nullable().optional(),
+        postalCode: z.string().nullable().optional(),
+        isPrimary: z.boolean(),
+        latitude: z.number().nullable().optional(),
+        longitude: z.number().nullable().optional(),
+      }),
+    )
+    .optional(),
+  emergencyContacts: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        phone: z.string(),
+        relation: z.enum(['parent', 'spouse', 'sibling', 'other']).optional(),
+        isPrimary: z.boolean(),
+      }),
+    )
+    .optional(),
+  contactPhones: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        phone: z.string(),
+        label: z.enum(['mobile', 'home', 'work', 'other']).optional(),
+        isWhatsApp: z.boolean(),
+        isPrimarySecondary: z.boolean(),
+        notes: z.string().nullable().optional(),
+      }),
+    )
+    .optional(),
   customer: GlobalCustomerEmbedSchema.extend({
     email: z.string().nullable().optional(),
     nationalId: z.string().nullable().optional(),
@@ -167,10 +218,42 @@ export type TenantCustomerResponseDto = z.infer<typeof TenantCustomerResponseSch
 export {
   GetTenantCustomerQuerySchema,
   TenantCustomerDetailResponseSchema,
+  TenantCustomerDetailSchema,
   TenantCustomerGlobalProfileSchema,
   TenantCustomerSalesSummarySchema,
+  CustomerCategoryEmbedSchema,
   type GetTenantCustomerQueryDto,
   type TenantCustomerDetailResponseDto,
+  type TenantCustomerDetailDto,
   type TenantCustomerGlobalProfileDto,
   type TenantCustomerSalesSummaryDto,
+  type CustomerCategoryEmbedDto,
 } from './tenant-customer-detail.schema.js';
+
+export {
+  CustomerDocumentSchema,
+  CustomerDocumentTypeSchema,
+  UploadCustomerDocumentBodySchema,
+  ListCustomerDocumentsQuerySchema,
+  CustomerDocumentListResponseSchema,
+  DeleteCustomerDocumentBodySchema,
+  CustomerDocumentDownloadResponseSchema,
+  type CustomerDocumentDto,
+  type CustomerDocumentTypeDto,
+  type UploadCustomerDocumentBodyDto,
+  type ListCustomerDocumentsQueryDto,
+  type CustomerDocumentListResponseDto,
+  type DeleteCustomerDocumentBodyDto,
+  type CustomerDocumentDownloadResponseDto,
+} from './customer-document.schema.js';
+
+export {
+  CustomerNoteSchema,
+  CreateCustomerNoteInputSchema,
+  type CustomerNoteDto,
+  type CreateCustomerNoteInputDto,
+} from './customer-note.schema.js';
+
+export { MergeCustomersSchema, type MergeCustomersDto } from './merge-customers.schema.js';
+
+export { customerValidationMessages } from './customer-validation-messages.js';
