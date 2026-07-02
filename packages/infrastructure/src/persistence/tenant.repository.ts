@@ -43,6 +43,7 @@ export class PrismaTenantRepository implements ITenantRepository {
       enabledModules: [...row.enabledModules],
       trialEndsAt: row.trialEndsAt,
       onboardingCompletedAt: row.onboardingCompletedAt,
+      metadata: row.metadata,
     };
   }
 

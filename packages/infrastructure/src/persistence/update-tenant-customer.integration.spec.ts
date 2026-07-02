@@ -1,34 +1,15 @@
 import { afterAll, describe, expect, it } from 'vitest';
 
-import {
-  PrismaAuditService,
-  PrismaBranchReader,
-  PrismaGlobalCustomerRepository,
-  PrismaSaleRepository,
-  PrismaTenantCustomerRepository,
-  PrismaService,
-} from '../index.js';
+import { PrismaService } from '../index.js';
 import { ensureTestGlobalCustomer } from '../persistence/test-user.helper.js';
-import { UpdateTenantCustomerUseCase } from '@hivork/application';
+import { buildUpdateTenantCustomerUseCase } from '../persistence/test-update-tenant-customer.helper.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 const describeIfDb = databaseUrl ? describe : describe.skip;
 
 describeIfDb('UpdateTenantCustomerUseCase (integration)', () => {
   const prisma = new PrismaService();
-  const tenantCustomers = new PrismaTenantCustomerRepository(prisma);
-  const globalCustomers = new PrismaGlobalCustomerRepository(prisma);
-  const branches = new PrismaBranchReader(prisma);
-  const sales = new PrismaSaleRepository(prisma);
-  const audit = new PrismaAuditService(prisma);
-
-  const useCase = new UpdateTenantCustomerUseCase(
-    tenantCustomers,
-    globalCustomers,
-    branches,
-    sales,
-    audit,
-  );
+  const useCase = buildUpdateTenantCustomerUseCase(prisma);
 
   afterAll(async () => {
     await prisma.$disconnect();
@@ -75,6 +56,7 @@ describeIfDb('UpdateTenantCustomerUseCase (integration)', () => {
       defaultBranchId: tenant.branches[0].id,
       staffContext,
       canUpdateInternalNotes: true,
+      canBlacklist: true,
     });
 
     expect(updated.notes).toBe('after');
@@ -82,10 +64,15 @@ describeIfDb('UpdateTenantCustomerUseCase (integration)', () => {
     expect(updated.defaultBranchId).toBe(tenant.branches[0].id);
     expect(updated.version).toBe(link.version + 1);
 
-    const reloaded = await tenantCustomers.findDetailById(link.id, tenant.id);
+    const reloaded = await prisma.tenantCustomer.findFirst({
+      where: { id: link.id, tenantId: tenant.id },
+    });
     expect(reloaded?.notes).toBe('after');
 
-    const global = await globalCustomers.findByPhone(phone);
+    const global = await prisma.globalCustomer.findFirst({
+      where: { id: globalCustomer.id },
+      include: { user: true },
+    });
     expect(global?.name).toBe('After Update');
 
     await prisma.tenantCustomer.update({
@@ -95,6 +82,129 @@ describeIfDb('UpdateTenantCustomerUseCase (integration)', () => {
     await prisma.globalCustomer.update({
       where: { id: globalCustomer.id },
       data: { deletedAt: new Date() },
+    });
+  });
+
+  it('syncs nested addresses on update', async () => {
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug: 'demo-shop', deletedAt: null },
+    });
+    if (!tenant) {
+      throw new Error('demo-shop tenant required');
+    }
+
+    const phone = `0913${String(Date.now()).slice(-7)}`;
+    const globalCustomer = await ensureTestGlobalCustomer(prisma, phone, 'Nested Update');
+
+    const link = await prisma.tenantCustomer.create({
+      data: {
+        tenantId: tenant.id,
+        globalCustomerId: globalCustomer.id,
+        notes: 'nested-before',
+      },
+    });
+
+    const staffContext = {
+      staffId: '00000000-0000-0000-0000-000000000001',
+      dataScope: 'all' as const,
+      assignedBranchIds: [] as string[],
+      activeBranchId: null,
+    };
+
+    const updated = await useCase.execute({
+      tenantId: tenant.id,
+      actorId: staffContext.staffId,
+      tenantCustomerId: link.id,
+      version: link.version,
+      addresses: [
+        {
+          label: 'home',
+          line1: 'خیابان اول',
+          city: 'تهران',
+          isPrimary: true,
+        },
+      ],
+      staffContext,
+      canUpdateInternalNotes: true,
+      canBlacklist: true,
+    });
+
+    expect(updated.addresses).toHaveLength(1);
+    expect(updated.addresses[0]?.line1).toBe('خیابان اول');
+    expect(updated.addresses[0]?.isPrimary).toBe(true);
+
+    const withCoords = await useCase.execute({
+      tenantId: tenant.id,
+      actorId: staffContext.staffId,
+      tenantCustomerId: link.id,
+      version: updated.version,
+      addresses: [
+        {
+          id: updated.addresses[0]?.id,
+          label: 'home',
+          line1: 'خیابان اول',
+          city: 'تهران',
+          isPrimary: true,
+          latitude: 35.6892,
+          longitude: 51.389,
+        },
+      ],
+      staffContext,
+      canUpdateInternalNotes: true,
+      canBlacklist: true,
+    });
+
+    expect(withCoords.addresses[0]?.latitude).toBe(35.6892);
+    expect(withCoords.addresses[0]?.longitude).toBe(51.389);
+
+    await prisma.customerAddress.updateMany({
+      where: { tenantCustomerId: link.id },
+      data: { deletedAt: new Date(), deletedById: staffContext.staffId },
+    });
+    await prisma.tenantCustomer.update({
+      where: { id: link.id },
+      data: { deletedAt: new Date(), deletedById: staffContext.staffId },
+    });
+    await prisma.globalCustomer.update({
+      where: { id: globalCustomer.id },
+      data: { deletedAt: new Date() },
+    });
+  });
+
+  it('rejects optimistic lock conflict', async () => {
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug: 'demo-shop', deletedAt: null },
+    });
+    if (!tenant) {
+      return;
+    }
+
+    const link = await prisma.tenantCustomer.findFirst({
+      where: { tenantId: tenant.id, deletedAt: null },
+    });
+    if (!link) {
+      return;
+    }
+
+    await expect(
+      useCase.execute({
+        tenantId: tenant.id,
+        actorId: '00000000-0000-0000-0000-000000000001',
+        tenantCustomerId: link.id,
+        version: link.version - 1,
+        notes: 'stale',
+        staffContext: {
+          staffId: '00000000-0000-0000-0000-000000000001',
+          dataScope: 'all',
+          assignedBranchIds: [],
+          activeBranchId: null,
+        },
+        canUpdateInternalNotes: true,
+        canBlacklist: true,
+      }),
+    ).rejects.toMatchObject({
+      code: 'OPTIMISTIC_LOCK_CONFLICT',
+      httpStatus: 409,
     });
   });
 
@@ -129,6 +239,8 @@ describeIfDb('UpdateTenantCustomerUseCase (integration)', () => {
           assignedBranchIds: [],
           activeBranchId: null,
         },
+        canUpdateInternalNotes: true,
+        canBlacklist: true,
       }),
     ).rejects.toMatchObject({
       code: 'CUSTOMER_NOT_FOUND',

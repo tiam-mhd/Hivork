@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { GetInstallmentSettingsUseCase } from '@hivork/application';
 
 import { PrismaTenantSettingsRepository } from '../settings/prisma-tenant-settings.repository.js';
+import { PrismaTenantSequenceRepository } from '../persistence/prisma-tenant-sequence.repository.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PrismaModuleEntitlement } from './prisma-module-entitlement.js';
 
@@ -12,8 +13,13 @@ const describeIfDb = databaseUrl ? describe : describe.skip;
 describeIfDb('GetInstallmentSettingsUseCase (integration)', () => {
   const prisma = new PrismaService();
   const settingsRepository = new PrismaTenantSettingsRepository(prisma);
+  const sequences = new PrismaTenantSequenceRepository(prisma);
   const moduleEntitlement = new PrismaModuleEntitlement(prisma);
-  const useCase = new GetInstallmentSettingsUseCase(moduleEntitlement, settingsRepository);
+  const useCase = new GetInstallmentSettingsUseCase(
+    moduleEntitlement,
+    settingsRepository,
+    sequences,
+  );
 
   afterAll(async () => {
     await prisma.$disconnect();

@@ -9,13 +9,13 @@ import type {
 } from '@hivork/application';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { PrismaStaffSavedFilter, StaffSavedView as PrismaStaffSavedView } from '@prisma/client';
+import type { StaffSavedFilter, StaffSavedView as PrismaStaffSavedView } from '@prisma/client';
 
 import { runWithBypassSoftDelete } from '../context/request-context.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 type SavedViewRow = PrismaStaffSavedView & {
-  savedFilter: PrismaStaffSavedFilter | null;
+  savedFilter: StaffSavedFilter | null;
   staff: { name: string } | null;
 };
 

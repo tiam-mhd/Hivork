@@ -44,11 +44,26 @@ export {
   PrismaPermissionOverrideRepository,
   PrismaTenantPlanReader,
   PrismaSaleRepository,
+  PrismaContractVersionRepository,
+  PrismaContractAttachmentRepository,
+  PrismaContractGuarantorRepository,
+  PrismaContractCollateralRepository,
+  PrismaSaleLineItemRepository,
+  PrismaContractNumberAllocator,
+  PrismaTenantSequenceRepository,
+  MetadataSaleCopyRelatedRepository,
+  NoOpInstallmentScheduleExtender,
+  NoOpInstallmentCloseWaiver,
   PrismaInstallmentRepository,
   PrismaInstallmentReportRepository,
   PrismaOverdueReportRepository,
   PrismaSaleIdempotencyStore,
   PrismaUnitOfWork,
+  PrismaCustomerAddressRepository,
+  PrismaCustomerEmergencyContactRepository,
+  PrismaCustomerContactPhoneRepository,
+  PrismaCustomerCategoryReader,
+  buildCreateTenantCustomerUseCase,
   PrismaAuditService,
   PrismaAuditLogService,
   PrismaTenantSettingsRepository,
@@ -80,6 +95,8 @@ export { RedisTenantModulesCache } from './redis/redis-tenant-modules.cache.js';
 export { RedisReportCache } from './cache/report-cache.service.js';
 export { TempFileService } from './storage/temp-file.service.js';
 export { RedisCustomerImportIdempotencyStore } from './redis/redis-customer-import-idempotency.store.js';
+export { RedisCustomerMergeIdempotencyStore } from './redis/redis-customer-merge-idempotency.store.js';
+export { PrismaTenantCustomerMergeRepository } from './persistence/tenant-customer-merge.repository.js';
 export { RegisterRateLimiterService, REGISTER_RATE_LIMIT_WINDOW_SECONDS } from './redis/register-rate-limiter.service.js';
 export { RedisPasswordLoginFailureCounter } from './redis/redis-password-login-failure-counter.js';
 export { ConsoleSmsAdapter } from './sms/console-sms.adapter.js';
@@ -89,6 +106,9 @@ export {
   ExpireStaffSessionsService,
 } from './persistence/staff-session.repository.js';
 export { RedisStaffSessionRefreshBlacklistService } from './redis/redis-staff-session-refresh-blacklist.service.js';
+export { RedisRealtimePublisher } from './redis/redis-realtime-publisher.js';
+export { RedisRealtimeConnectionRegistry } from './redis/redis-realtime-connection-registry.js';
+export { RedisRealtimeUnreadCounter } from './redis/redis-realtime-unread-counter.js';
 export { PrismaUserSessionRevocationService } from './auth/prisma-user-session-revocation.service.js';
 export { IpAllowlistService } from './security/ip-allowlist.service.js';
 export { isClientIpAllowed, validateIpv4CidrEntries } from './security/ip-match.js';
@@ -97,6 +117,15 @@ export { PrismaStaffSavedFilterRepository } from './persistence/staff-saved-filt
 export { PrismaStaffSavedViewRepository } from './persistence/staff-saved-view.repository.js';
 export { RedisExportRateLimiterService } from './redis/redis-export-rate-limiter.service.js';
 export { RedisPrintSnapshotStore } from './redis/redis-print-snapshot.store.js';
+export { CustomerXlsxExportWriter } from './export/customer-xlsx.writer.js';
+export { CustomerPdfExportWriter } from './export/customer-pdf.writer.js';
+export { LocalFileStorageService } from './files/local-file-storage.service.js';
+export { NoopFileVirusScanPort } from './files/noop-file-virus-scan.port.js';
+export { PrismaCustomerDocumentRepository } from './persistence/customer-document.repository.js';
+export { PrismaCustomerNoteRepository } from './persistence/customer-note.repository.js';
+export { CustomerTimelineQuery } from './persistence/queries/customer-timeline.query.js';
+export { CustomerPaymentsQuery } from './persistence/queries/customer-payments.query.js';
+export { CustomerContractsQuery } from './persistence/queries/customer-contracts.query.js';
 export { PuppeteerPdfExportService } from './export/puppeteer-pdf-export.service.js';
 export { ApiKeyRateLimiterService } from './redis/api-key-rate-limiter.service.js';
 export { PrismaStaffSecurityAuditRepository } from './audit/prisma-staff-security-audit.repository.js';

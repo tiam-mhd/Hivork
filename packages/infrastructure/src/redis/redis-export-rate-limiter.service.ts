@@ -1,9 +1,9 @@
-import { ApplicationError, EXPORT_RATE_LIMIT_PER_MINUTE, type IExportRateLimiterPort } from '@hivork/application';
+import { ApplicationError, EXPORT_RATE_LIMIT_PER_HOUR, type IExportRateLimiterPort } from '@hivork/application';
 import { Injectable } from '@nestjs/common';
 
 import { RedisService } from '../redis/redis.service.js';
 
-const WINDOW_SECONDS = 60;
+const WINDOW_SECONDS = 3_600;
 
 @Injectable()
 export class RedisExportRateLimiterService implements IExportRateLimiterPort {
@@ -16,10 +16,10 @@ export class RedisExportRateLimiterService implements IExportRateLimiterPort {
       await this.redis.client.expire(key, WINDOW_SECONDS);
     }
 
-    if (count > EXPORT_RATE_LIMIT_PER_MINUTE) {
+    if (count > EXPORT_RATE_LIMIT_PER_HOUR) {
       throw new ApplicationError(
-        'RATE_LIMIT_EXCEEDED',
-        'Too many export requests. Please wait a minute.',
+        'TOO_MANY_REQUESTS',
+        'Too many export requests. Please try again later.',
         429,
       );
     }

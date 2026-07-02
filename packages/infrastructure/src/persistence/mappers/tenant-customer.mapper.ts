@@ -21,6 +21,11 @@ type TenantCustomerRow = {
   deletedById: string | null;
   deleteReason: string | null;
   version: number;
+  categoryId?: string | null;
+  status?: 'active' | 'archived' | 'blacklisted';
+  isBlacklisted?: boolean;
+  blacklistReason?: string | null;
+  assignedStaffId?: string | null;
 };
 
 export function tenantCustomerToRecord(row: TenantCustomerRow): TenantCustomerRecord {
@@ -51,5 +56,10 @@ export function tenantCustomerToDetailRecord(row: TenantCustomerRow): TenantCust
     lastPurchaseAt: row.lastPurchaseAt,
     createdAt: row.createdAt,
     createdById: row.createdById,
+    categoryId: row.categoryId ?? null,
+    status: row.status ?? 'active',
+    isBlacklisted: row.isBlacklisted ?? false,
+    blacklistReason: row.blacklistReason ?? null,
+    assignedStaffId: row.assignedStaffId ?? null,
   };
 }

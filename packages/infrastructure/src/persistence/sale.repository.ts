@@ -3,18 +3,27 @@ import type {
   ListSalesQueryOptions,
   ListSalesResult,
   OutboxTransaction,
+  RestoreCommand,
   SaleDetailRecord,
   SaleListItem,
   SaleRecord,
   SaveSalePersistenceInput,
+  SoftDeleteCommand,
   TenantCustomerSalesSummary,
   TenantCustomerSalesSummaryScope,
   UpdateSalePersistenceInput,
+  UpdateSaleFinancialsPersistenceInput,
+  ExtendSalePersistenceInput,
+  TerminateSalePersistenceInput,
+  CloseSalePersistenceInput,
+  ArchiveSalePersistenceInput,
+  UnarchiveSalePersistenceInput,
 } from '@hivork/application';
 import { ApplicationError } from '@hivork/application';
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Sale } from '@prisma/client';
 
+import { runWithBypassSoftDelete } from '../context/request-context.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   globalCustomerListSelect,
@@ -37,10 +46,31 @@ function saleToRecord(row: Sale): SaleRecord {
     title: row.title,
     description: row.description,
     invoiceNumber: row.invoiceNumber,
+    contractNumber: row.contractNumber,
+    customTerms: row.customTerms,
+    signatureStatus: row.signatureStatus,
+    signedAt: row.signedAt,
+    extendedFromSaleId: row.extendedFromSaleId,
+    copiedFromSaleId: row.copiedFromSaleId,
+    terminatedAt: row.terminatedAt,
+    terminatedById: row.terminatedById,
+    terminateReason: row.terminateReason,
+    closedAt: row.closedAt,
+    closedById: row.closedById,
+    closeReason: row.closeReason,
+    archivedAt: row.archivedAt,
+    archivedById: row.archivedById,
+    archiveReason: row.archiveReason,
+    insuranceRial: row.insuranceRial,
+    insuranceProvider: row.insuranceProvider,
+    insurancePolicyNumber: row.insurancePolicyNumber,
+    insuranceExpiresAt: row.insuranceExpiresAt,
     totalAmountRial: row.totalAmountRial,
     downPaymentRial: row.downPaymentRial,
     discountRial: row.discountRial,
     taxRial: row.taxRial,
+    taxRateBps: row.taxRateBps,
+    taxInclusive: row.taxInclusive,
     installmentCount: row.installmentCount,
     firstDueDate: row.firstDueDate,
     intervalDays: row.intervalDays,
@@ -52,6 +82,7 @@ function saleToRecord(row: Sale): SaleRecord {
     deletedAt: row.deletedAt,
     deletedById: row.deletedById,
     deleteReason: row.deleteReason,
+    metadata: row.metadata as Record<string, unknown> | null,
     version: row.version,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -153,6 +184,15 @@ export class PrismaSaleRepository implements ISaleRepository {
         contractDate: input.contractDate,
         status: input.status,
         version: input.version,
+        contractNumber: input.contractNumber ?? null,
+        copiedFromSaleId: input.copiedFromSaleId ?? null,
+        customTerms: input.customTerms ?? null,
+        insuranceRial: input.insuranceRial ?? null,
+        insuranceProvider: input.insuranceProvider ?? null,
+        insurancePolicyNumber: input.insurancePolicyNumber ?? null,
+        insuranceExpiresAt: input.insuranceExpiresAt ?? null,
+        taxRateBps: input.taxRateBps ?? null,
+        taxInclusive: input.taxInclusive ?? false,
         metadata: input.metadata ?? undefined,
         createdById: input.createdById,
         updatedById: input.createdById,
@@ -231,6 +271,57 @@ export class PrismaSaleRepository implements ISaleRepository {
 
     if (cursorWhere) {
       andFilters.push(cursorWhere);
+    }
+
+    const hasExplicitStatusFilter = Boolean(options.statuses?.length || options.status);
+    if (!options.includeArchived && !hasExplicitStatusFilter) {
+      andFilters.push({ status: { not: 'ARCHIVED' } });
+    }
+
+    if (options.contractNumber?.trim()) {
+      andFilters.push({ contractNumber: options.contractNumber.trim() });
+    }
+
+    if (options.includeDeleted) {
+      return runWithBypassSoftDelete(async () => {
+        const deletedWhere: Prisma.SaleWhereInput = {
+          tenantId,
+          deletedAt: { not: null },
+          ...(options.branchIds?.length ? { branchId: { in: options.branchIds } } : {}),
+          ...(options.createdByStaffId ? { createdByStaffId: options.createdByStaffId } : {}),
+          ...(andFilters.length > 0 ? { AND: andFilters } : {}),
+        };
+
+        const rows = await this.prisma.sale.findMany({
+          where: deletedWhere,
+          include: {
+            tenantCustomer: {
+              include: {
+                globalCustomer: {
+                  select: globalCustomerListSelect,
+                },
+              },
+            },
+            _count: {
+              select: {
+                installments: {
+                  where: { status: 'PAID', deletedAt: null },
+                },
+              },
+            },
+          },
+          orderBy: buildOrderBy(options.sort),
+          take: options.limit + 1,
+        });
+
+        const hasMore = rows.length > options.limit;
+        const page = hasMore ? rows.slice(0, options.limit) : rows;
+
+        return {
+          items: page.map((row) => toListItem(row as SaleWithRelations)),
+          hasMore,
+        };
+      });
     }
 
     const where: Prisma.SaleWhereInput = {
@@ -330,6 +421,364 @@ export class PrismaSaleRepository implements ISaleRepository {
     });
 
     return saleToRecord(updated);
+  }
+
+  async updateFinancials(
+    input: UpdateSaleFinancialsPersistenceInput,
+    tx?: OutboxTransaction,
+  ): Promise<SaleRecord> {
+    const client = resolveClient(this.prisma, tx);
+
+    const row = await client.sale.findFirst({
+      where: {
+        id: input.id,
+        tenantId: input.tenantId,
+        deletedAt: null,
+        version: input.version,
+      },
+    });
+
+    if (!row) {
+      const current = await client.sale.findFirst({
+        where: { id: input.id, tenantId: input.tenantId },
+      });
+
+      if (!current || current.deletedAt) {
+        throw new ApplicationError('SALE_NOT_FOUND', 'Sale was not found.', 404);
+      }
+
+      throw new ApplicationError(
+        'VERSION_CONFLICT',
+        'Sale was updated by another user. Refresh and try again.',
+        409,
+      );
+    }
+
+    const updated = await client.sale.update({
+      where: { id: input.id },
+      data: {
+        ...(input.totalAmountRial !== undefined ? { totalAmountRial: input.totalAmountRial } : {}),
+        ...(input.taxRial !== undefined ? { taxRial: input.taxRial } : {}),
+        ...(input.taxRateBps !== undefined ? { taxRateBps: input.taxRateBps } : {}),
+        ...(input.taxInclusive !== undefined ? { taxInclusive: input.taxInclusive } : {}),
+        ...(input.insuranceRial !== undefined ? { insuranceRial: input.insuranceRial } : {}),
+        ...(input.insuranceProvider !== undefined
+          ? { insuranceProvider: input.insuranceProvider }
+          : {}),
+        ...(input.insurancePolicyNumber !== undefined
+          ? { insurancePolicyNumber: input.insurancePolicyNumber }
+          : {}),
+        ...(input.insuranceExpiresAt !== undefined
+          ? { insuranceExpiresAt: input.insuranceExpiresAt }
+          : {}),
+        version: { increment: 1 },
+        updatedById: input.updatedById,
+      },
+    });
+
+    return saleToRecord(updated);
+  }
+
+  async extend(input: ExtendSalePersistenceInput, tx?: OutboxTransaction): Promise<SaleRecord> {
+    const client = resolveClient(this.prisma, tx);
+
+    const row = await client.sale.findFirst({
+      where: {
+        id: input.id,
+        tenantId: input.tenantId,
+        deletedAt: null,
+        version: input.version,
+      },
+    });
+
+    if (!row) {
+      const current = await client.sale.findFirst({
+        where: { id: input.id, tenantId: input.tenantId },
+      });
+
+      if (!current || current.deletedAt) {
+        throw new ApplicationError('SALE_NOT_FOUND', 'Sale was not found.', 404);
+      }
+
+      throw new ApplicationError(
+        'VERSION_CONFLICT',
+        'Sale was updated by another user. Refresh and try again.',
+        409,
+      );
+    }
+
+    const updated = await client.sale.update({
+      where: { id: input.id },
+      data: {
+        extendedFromSaleId: input.extendedFromSaleId,
+        installmentCount: input.installmentCount,
+        metadata: input.metadata ?? undefined,
+        version: { increment: 1 },
+        updatedById: input.updatedById,
+      },
+    });
+
+    return saleToRecord(updated);
+  }
+
+  async terminate(
+    input: TerminateSalePersistenceInput,
+    tx?: OutboxTransaction,
+  ): Promise<SaleRecord> {
+    const client = resolveClient(this.prisma, tx);
+
+    const row = await client.sale.findFirst({
+      where: {
+        id: input.id,
+        tenantId: input.tenantId,
+        deletedAt: null,
+        version: input.version,
+      },
+    });
+
+    if (!row) {
+      const current = await client.sale.findFirst({
+        where: { id: input.id, tenantId: input.tenantId },
+      });
+
+      if (!current || current.deletedAt) {
+        throw new ApplicationError('SALE_NOT_FOUND', 'Sale was not found.', 404);
+      }
+
+      throw new ApplicationError(
+        'VERSION_CONFLICT',
+        'Sale was updated by another user. Refresh and try again.',
+        409,
+      );
+    }
+
+    const updated = await client.sale.update({
+      where: { id: input.id },
+      data: {
+        status: 'TERMINATED',
+        terminatedAt: input.terminatedAt,
+        terminatedById: input.terminatedById,
+        terminateReason: input.terminateReason,
+        version: { increment: 1 },
+        updatedById: input.updatedById,
+      },
+    });
+
+    return saleToRecord(updated);
+  }
+
+  async close(input: CloseSalePersistenceInput, tx?: OutboxTransaction): Promise<SaleRecord> {
+    const client = resolveClient(this.prisma, tx);
+
+    const row = await client.sale.findFirst({
+      where: {
+        id: input.id,
+        tenantId: input.tenantId,
+        deletedAt: null,
+        version: input.version,
+      },
+    });
+
+    if (!row) {
+      const current = await client.sale.findFirst({
+        where: { id: input.id, tenantId: input.tenantId },
+      });
+
+      if (!current || current.deletedAt) {
+        throw new ApplicationError('SALE_NOT_FOUND', 'Sale was not found.', 404);
+      }
+
+      throw new ApplicationError(
+        'VERSION_CONFLICT',
+        'Sale was updated by another user. Refresh and try again.',
+        409,
+      );
+    }
+
+    const updated = await client.sale.update({
+      where: { id: input.id },
+      data: {
+        status: 'CLOSED',
+        closedAt: input.closedAt,
+        closedById: input.closedById,
+        closeReason: input.closeReason,
+        version: { increment: 1 },
+        updatedById: input.updatedById,
+      },
+    });
+
+    return saleToRecord(updated);
+  }
+
+  async archive(input: ArchiveSalePersistenceInput, tx?: OutboxTransaction): Promise<SaleRecord> {
+    const client = resolveClient(this.prisma, tx);
+
+    const row = await client.sale.findFirst({
+      where: {
+        id: input.id,
+        tenantId: input.tenantId,
+        deletedAt: null,
+        version: input.version,
+      },
+    });
+
+    if (!row) {
+      const current = await client.sale.findFirst({
+        where: { id: input.id, tenantId: input.tenantId },
+      });
+
+      if (!current || current.deletedAt) {
+        throw new ApplicationError('SALE_NOT_FOUND', 'Sale was not found.', 404);
+      }
+
+      throw new ApplicationError(
+        'VERSION_CONFLICT',
+        'Sale was updated by another user. Refresh and try again.',
+        409,
+      );
+    }
+
+    const updated = await client.sale.update({
+      where: { id: input.id },
+      data: {
+        status: 'ARCHIVED',
+        archivedAt: input.archivedAt,
+        archivedById: input.archivedById,
+        archiveReason: input.archiveReason,
+        metadata:
+          input.metadata === null
+            ? Prisma.JsonNull
+            : (input.metadata as Prisma.InputJsonValue | undefined),
+        version: { increment: 1 },
+        updatedById: input.updatedById,
+      },
+    });
+
+    return saleToRecord(updated);
+  }
+
+  async unarchive(
+    input: UnarchiveSalePersistenceInput,
+    tx?: OutboxTransaction,
+  ): Promise<SaleRecord> {
+    const client = resolveClient(this.prisma, tx);
+
+    const row = await client.sale.findFirst({
+      where: {
+        id: input.id,
+        tenantId: input.tenantId,
+        deletedAt: null,
+        version: input.version,
+      },
+    });
+
+    if (!row) {
+      const current = await client.sale.findFirst({
+        where: { id: input.id, tenantId: input.tenantId },
+      });
+
+      if (!current || current.deletedAt) {
+        throw new ApplicationError('SALE_NOT_FOUND', 'Sale was not found.', 404);
+      }
+
+      throw new ApplicationError(
+        'VERSION_CONFLICT',
+        'Sale was updated by another user. Refresh and try again.',
+        409,
+      );
+    }
+
+    const updated = await client.sale.update({
+      where: { id: input.id },
+      data: {
+        status: input.status,
+        archivedAt: null,
+        archivedById: null,
+        archiveReason: null,
+        metadata:
+          input.metadata === null
+            ? Prisma.JsonNull
+            : (input.metadata as Prisma.InputJsonValue | undefined),
+        version: { increment: 1 },
+        updatedById: input.updatedById,
+      },
+    });
+
+    return saleToRecord(updated);
+  }
+
+  async softDelete(command: SoftDeleteCommand, tx?: OutboxTransaction): Promise<SaleRecord> {
+    const client = resolveClient(this.prisma, tx);
+
+    const row = await client.sale.findFirst({
+      where: {
+        id: command.id,
+        tenantId: command.tenantId,
+        deletedAt: null,
+      },
+    });
+
+    if (!row) {
+      throw new ApplicationError('SALE_NOT_FOUND', 'Sale was not found.', 404);
+    }
+
+    const updated = await client.sale.update({
+      where: { id: command.id },
+      data: {
+        deletedAt: new Date(),
+        deletedById: command.deletedById,
+        deleteReason: command.deleteReason ?? null,
+        version: { increment: 1 },
+        updatedById: command.deletedById,
+      },
+    });
+
+    return saleToRecord(updated);
+  }
+
+  async restore(command: RestoreCommand, tx?: OutboxTransaction): Promise<SaleRecord> {
+    const client = resolveClient(this.prisma, tx);
+
+    return runWithBypassSoftDelete(async () => {
+      const row = await client.sale.findFirst({
+        where: {
+          id: command.id,
+          tenantId: command.tenantId,
+          deletedAt: { not: null },
+        },
+      });
+
+      if (!row) {
+        throw new ApplicationError('SALE_NOT_FOUND', 'Sale was not found.', 404);
+      }
+
+      const updated = await client.sale.update({
+        where: { id: command.id },
+        data: {
+          deletedAt: null,
+          deletedById: null,
+          deleteReason: null,
+          version: { increment: 1 },
+          updatedById: command.restoredById,
+        },
+      });
+
+      return saleToRecord(updated);
+    });
+  }
+
+  async findDeletedById(
+    tenantId: string,
+    saleId: string,
+    _tx?: OutboxTransaction,
+  ): Promise<SaleRecord | null> {
+    return runWithBypassSoftDelete(async () => {
+      const row = await this.prisma.sale.findFirst({
+        where: { id: saleId, tenantId, deletedAt: { not: null } },
+      });
+
+      return row ? saleToRecord(row) : null;
+    });
   }
 
   async countActive(tenantId: string, tx?: OutboxTransaction): Promise<number> {
@@ -444,5 +893,50 @@ export class PrismaSaleRepository implements ISaleRepository {
         return _exhaustive;
       }
     }
+  }
+
+  async reassignTenantCustomer(
+    tenantId: string,
+    sourceTenantCustomerId: string,
+    targetTenantCustomerId: string,
+    updatedById: string,
+    tx?: OutboxTransaction,
+  ): Promise<number> {
+    const client = resolveClient(this.prisma, tx);
+    const result = await client.sale.updateMany({
+      where: {
+        tenantId,
+        tenantCustomerId: sourceTenantCustomerId,
+        deletedAt: null,
+      },
+      data: {
+        tenantCustomerId: targetTenantCustomerId,
+        updatedById,
+        version: { increment: 1 },
+      },
+    });
+
+    return result.count;
+  }
+
+  async countPendingPaymentAttemptsForCustomer(
+    tenantId: string,
+    tenantCustomerId: string,
+  ): Promise<number> {
+    return this.prisma.paymentAttempt.count({
+      where: {
+        tenantId,
+        deletedAt: null,
+        status: 'PENDING',
+        installment: {
+          deletedAt: null,
+          sale: {
+            tenantId,
+            tenantCustomerId,
+            deletedAt: null,
+          },
+        },
+      },
+    });
   }
 }

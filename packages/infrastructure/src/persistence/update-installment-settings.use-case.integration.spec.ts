@@ -6,6 +6,7 @@ import {
 } from '@hivork/application';
 
 import { PrismaAuditService } from '../audit/prisma-audit.service.js';
+import { PrismaTenantSequenceRepository } from '../persistence/prisma-tenant-sequence.repository.js';
 import { PrismaTenantSettingsRepository } from '../settings/prisma-tenant-settings.repository.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PrismaModuleEntitlement } from './prisma-module-entitlement.js';
@@ -18,9 +19,14 @@ describeIfDb('UpdateInstallmentSettingsUseCase (integration)', () => {
   const prisma = new PrismaService();
   const unitOfWork = new PrismaUnitOfWork(prisma);
   const settingsRepository = new PrismaTenantSettingsRepository(prisma);
+  const sequences = new PrismaTenantSequenceRepository(prisma);
   const moduleEntitlement = new PrismaModuleEntitlement(prisma);
   const audit = new PrismaAuditService(prisma);
-  const getSettings = new GetInstallmentSettingsUseCase(moduleEntitlement, settingsRepository);
+  const getSettings = new GetInstallmentSettingsUseCase(
+    moduleEntitlement,
+    settingsRepository,
+    sequences,
+  );
   const updateSettings = new UpdateInstallmentSettingsUseCase(
     getSettings,
     settingsRepository,

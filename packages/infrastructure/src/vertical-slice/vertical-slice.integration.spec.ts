@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
 import {
-  CreateTenantCustomerUseCase,
   GetDashboardReportUseCase,
   ListTenantCustomersUseCase,
   RegisterTenantUseCase,
@@ -16,14 +15,12 @@ import {
   NoopLoginHardeningPort,
   OtpRateLimiterService,
   PrismaAuditService,
-  PrismaBranchReader,
   PrismaGlobalCustomerRepository,
   PrismaService,
   PrismaStaffRepository,
   PrismaUserRepository,
   PrismaInstallmentReportRepository,
   PrismaTenantCustomerRepository,
-  PrismaTenantPlanReader,
   PrismaTenantRegistrationRepository,
   PrismaTenantRepository,
   RedisOtpStore,
@@ -31,6 +28,7 @@ import {
   RedisService,
   RedisTokenBlacklistService,
   RegisterRateLimiterService,
+  buildCreateTenantCustomerUseCase,
   prismaRequestStorage,
 } from '../index.js';
 import Redis from 'ioredis';
@@ -85,7 +83,7 @@ describe.runIf(hasDatabase)('TASK-054 vertical slice (integration)', () => {
   let requestOtp: RequestOtpUseCase;
   let verifyOtp: VerifyOtpUseCase;
   let registerTenant: RegisterTenantUseCase;
-  let createCustomer: CreateTenantCustomerUseCase;
+  let createCustomer: ReturnType<typeof buildCreateTenantCustomerUseCase>;
   let listCustomers: ListTenantCustomersUseCase;
   let dashboard: GetDashboardReportUseCase;
   let softDelete: SoftDeleteEntityUseCase;
@@ -155,14 +153,7 @@ describe.runIf(hasDatabase)('TASK-054 vertical slice (integration)', () => {
       audit,
     );
 
-    createCustomer = new CreateTenantCustomerUseCase(
-      userRepository,
-      globalCustomers,
-      tenantCustomers,
-      new PrismaBranchReader(prisma),
-      new PrismaTenantPlanReader(prisma),
-      audit,
-    );
+    createCustomer = buildCreateTenantCustomerUseCase(prisma);
 
     listCustomers = new ListTenantCustomersUseCase(tenantCustomers);
     dashboard = new GetDashboardReportUseCase(

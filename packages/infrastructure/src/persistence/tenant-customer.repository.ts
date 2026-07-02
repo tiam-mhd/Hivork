@@ -4,8 +4,9 @@ import {
   type ITenantCustomerRepository,
   type ListActiveTenantCustomersOptions,
   type ListActiveTenantCustomersResult,
+  type OutboxTransaction,
   type RestoreTenantCustomerLinkInput,
-  type TenantCustomerListScope,
+  type TenantCustomerDetailWithRelationsRecord,
   type TenantCustomerFullDetail,
   type TenantCustomerRecord,
   type UpdateTenantCustomerLinkInput,
@@ -14,7 +15,6 @@ import {
 } from '@hivork/application';
 import { TenantCustomer } from '@hivork/domain';
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
 
 import { runWithBypassSoftDelete } from '../context/request-context.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -24,159 +24,30 @@ import {
   globalCustomerWithPhoneSelect,
   resolveGlobalCustomerPhone,
 } from './mappers/global-customer-phone.js';
+import {
+  buildTenantCustomerListOrderBy,
+  buildTenantCustomerListWhere,
+} from './repositories/tenant-customer-list.query.js';
 
-function buildScopeWhere(scope: TenantCustomerListScope): Prisma.TenantCustomerWhereInput | undefined {
-  switch (scope.dataScope) {
-    case 'all':
-      return undefined;
-    case 'branch':
-      if (!scope.branchIds?.length) {
-        return { id: { in: [] } };
-      }
+type TenantCustomerWriteClient = Pick<PrismaService, 'tenantCustomer'>;
 
-      return {
-        OR: [
-          { defaultBranchId: { in: scope.branchIds } },
-          {
-            sales: {
-              some: {
-                deletedAt: null,
-                branchId: { in: scope.branchIds },
-              },
-            },
-          },
-        ],
-      };
-    case 'own':
-      return {
-        sales: {
-          some: {
-            deletedAt: null,
-            createdByStaffId: scope.actorId,
-          },
-        },
-      };
+function resolveLinkStatus(row: {
+  archivedAt: Date | null;
+  isBlacklisted: boolean;
+}): 'active' | 'archived' | 'blacklisted' {
+  if (row.isBlacklisted) {
+    return 'blacklisted';
   }
+
+  if (row.archivedAt) {
+    return 'archived';
+  }
+
+  return 'active';
 }
 
-function buildSearchWhere(search: string): Prisma.TenantCustomerWhereInput {
-  const trimmed = search.trim();
-
-  return {
-    OR: [
-      { globalCustomer: { name: { contains: trimmed, mode: 'insensitive' } } },
-      { globalCustomer: { user: { phone: { contains: trimmed } } } },
-      { localCode: { contains: trimmed, mode: 'insensitive' } },
-    ],
-  };
-}
-
-function buildCursorWhere(
-  options: ListActiveTenantCustomersOptions,
-): Prisma.TenantCustomerWhereInput | undefined {
-  if (!options.cursor) {
-    return undefined;
-  }
-
-  const { id, createdAt, name, lastPurchaseAt, overdueCount } = options.cursor;
-
-  switch (options.sort) {
-    case 'createdAt:desc':
-      return {
-        OR: [{ createdAt: { lt: createdAt! } }, { createdAt: createdAt!, id: { lt: id } }],
-      };
-    case 'createdAt:asc':
-      return {
-        OR: [{ createdAt: { gt: createdAt! } }, { createdAt: createdAt!, id: { gt: id } }],
-      };
-    case 'name:desc':
-      return {
-        OR: [
-          { globalCustomer: { name: { lt: name ?? '', mode: 'insensitive' } } },
-          {
-            globalCustomer: { name: name ?? '' },
-            id: { lt: id },
-          },
-        ],
-      };
-    case 'name:asc':
-      return {
-        OR: [
-          { globalCustomer: { name: { gt: name ?? '', mode: 'insensitive' } } },
-          {
-            globalCustomer: { name: name ?? '' },
-            id: { gt: id },
-          },
-        ],
-      };
-    case 'lastPurchaseAt:desc':
-      if (lastPurchaseAt === null || lastPurchaseAt === undefined) {
-        return {
-          OR: [
-            { lastPurchaseAt: { not: null } },
-            { lastPurchaseAt: null, id: { lt: id } },
-          ],
-        };
-      }
-
-      return {
-        OR: [
-          { lastPurchaseAt: { lt: lastPurchaseAt } },
-          { lastPurchaseAt, id: { lt: id } },
-        ],
-      };
-    case 'lastPurchaseAt:asc':
-      if (lastPurchaseAt === null || lastPurchaseAt === undefined) {
-        return {
-          OR: [{ lastPurchaseAt: { not: null } }, { lastPurchaseAt: null, id: { gt: id } }],
-        };
-      }
-
-      return {
-        OR: [
-          { lastPurchaseAt: { gt: lastPurchaseAt } },
-          { lastPurchaseAt, id: { gt: id } },
-        ],
-      };
-    case 'overdueCount:desc':
-      return {
-        OR: [
-          { overdueCount: { lt: overdueCount! } },
-          { overdueCount: overdueCount!, id: { lt: id } },
-        ],
-      };
-    case 'overdueCount:asc':
-      return {
-        OR: [
-          { overdueCount: { gt: overdueCount! } },
-          { overdueCount: overdueCount!, id: { gt: id } },
-        ],
-      };
-  }
-}
-
-function buildOrderBy(
-  sort: ListActiveTenantCustomersOptions['sort'],
-): Prisma.TenantCustomerOrderByWithRelationInput[] {
-  switch (sort) {
-    case 'createdAt:asc':
-      return [{ createdAt: 'asc' }, { id: 'asc' }];
-    case 'name:asc':
-      return [{ globalCustomer: { name: 'asc' } }, { id: 'asc' }];
-    case 'name:desc':
-      return [{ globalCustomer: { name: 'desc' } }, { id: 'desc' }];
-    case 'lastPurchaseAt:asc':
-      return [{ lastPurchaseAt: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }];
-    case 'lastPurchaseAt:desc':
-      return [{ lastPurchaseAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }];
-    case 'overdueCount:asc':
-      return [{ overdueCount: 'asc' }, { id: 'asc' }];
-    case 'overdueCount:desc':
-      return [{ overdueCount: 'desc' }, { id: 'desc' }];
-    case 'createdAt:desc':
-    default:
-      return [{ createdAt: 'desc' }, { id: 'desc' }];
-  }
+function resolveClient(prisma: PrismaService, tx?: OutboxTransaction): TenantCustomerWriteClient {
+  return (tx ?? prisma) as TenantCustomerWriteClient;
 }
 
 @Injectable()
@@ -197,6 +68,99 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
     });
 
     return row ? tenantCustomerToDetailRecord(row) : null;
+  }
+
+  async findDetailWithRelationsById(
+    id: string,
+    tenantId: string,
+    tx?: OutboxTransaction,
+  ): Promise<TenantCustomerDetailWithRelationsRecord | null> {
+    const client = (tx ?? this.prisma) as PrismaService;
+    const row = await client.tenantCustomer.findFirst({
+      where: { id, tenantId, deletedAt: null },
+      include: {
+        addresses: { where: { deletedAt: null }, orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
+        emergencyContacts: {
+          where: { deletedAt: null },
+          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+        },
+        contactPhones: {
+          where: { deletedAt: null },
+          orderBy: [{ isPrimarySecondary: 'desc' }, { createdAt: 'asc' }],
+        },
+      },
+    });
+
+    if (!row) {
+      return null;
+    }
+
+    const detail = tenantCustomerToDetailRecord(row);
+
+    return {
+      ...detail,
+      addresses: row.addresses.map((address) => ({
+        id: address.id,
+        tenantId: address.tenantId,
+        tenantCustomerId: address.tenantCustomerId,
+        label: address.label,
+        line1: address.line1,
+        line2: address.line2,
+        city: address.city,
+        province: address.province,
+        postalCode: address.postalCode,
+        isPrimary: address.isPrimary,
+        latitude: address.latitude === null ? null : Number(address.latitude),
+        longitude: address.longitude === null ? null : Number(address.longitude),
+        createdAt: address.createdAt,
+        updatedAt: address.updatedAt,
+        createdById: address.createdById,
+        updatedById: address.updatedById,
+        deletedAt: address.deletedAt,
+        deletedById: address.deletedById,
+        deleteReason: address.deleteReason,
+        version: address.version,
+        metadata: address.metadata as Record<string, unknown> | null,
+      })),
+      emergencyContacts: row.emergencyContacts.map((contact) => ({
+        id: contact.id,
+        tenantId: contact.tenantId,
+        tenantCustomerId: contact.tenantCustomerId,
+        name: contact.name,
+        phone: contact.phone,
+        relation: contact.relation,
+        isPrimary: contact.isPrimary,
+        createdAt: contact.createdAt,
+        updatedAt: contact.updatedAt,
+        createdById: contact.createdById,
+        updatedById: contact.updatedById,
+        deletedAt: contact.deletedAt,
+        deletedById: contact.deletedById,
+        deleteReason: contact.deleteReason,
+        version: contact.version,
+        metadata: contact.metadata as Record<string, unknown> | null,
+      })),
+      contactPhones: row.contactPhones.map((phone) => ({
+        id: phone.id,
+        tenantId: phone.tenantId,
+        tenantCustomerId: phone.tenantCustomerId,
+        phone: phone.phone,
+        label: phone.label,
+        isWhatsApp: phone.isWhatsApp,
+        isPrimarySecondary: phone.isPrimarySecondary,
+        isVerified: phone.isVerified,
+        notes: phone.notes,
+        createdAt: phone.createdAt,
+        updatedAt: phone.updatedAt,
+        createdById: phone.createdById,
+        updatedById: phone.updatedById,
+        deletedAt: phone.deletedAt,
+        deletedById: phone.deletedById,
+        deleteReason: phone.deleteReason,
+        version: phone.version,
+        metadata: phone.metadata as Record<string, unknown> | null,
+      })),
+    };
   }
 
   async findFullDetailById(
@@ -268,18 +232,11 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
     });
   }
 
-  async createLink(input: CreateTenantCustomerLinkInput) {
-    const entity = TenantCustomer.link(input.tenantId, input.globalCustomerId, {
-      localCode: input.localCode,
-      notes: input.notes,
-      internalNotes: input.internalNotes,
-      defaultBranchId: input.defaultBranchId,
-      tags: input.tags,
-      preferredContactChannel: input.preferredContactChannel,
-      marketingOptIn: input.marketingOptIn ?? undefined,
-    });
+  async createLink(input: CreateTenantCustomerLinkInput, tx?: OutboxTransaction) {
+    const entity = this.buildLinkEntity(input);
+    const client = resolveClient(this.prisma, tx);
 
-    const row = await this.prisma.tenantCustomer.create({
+    const row = await client.tenantCustomer.create({
       data: {
         id: entity.id,
         tenantId: entity.tenantId,
@@ -291,6 +248,13 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
         tags: [...entity.tags],
         preferredContactChannel: input.preferredContactChannel ?? null,
         marketingOptIn: input.marketingOptIn ?? null,
+        categoryId: entity.categoryId,
+        assignedStaffId: entity.assignedStaffId,
+        status: entity.status,
+        isBlacklisted: entity.isBlacklisted,
+        blacklistReason: entity.blacklistReason,
+        blacklistedAt: entity.blacklistedAt,
+        blacklistedById: entity.blacklistedById,
         createdById: input.createdById,
         updatedById: input.createdById,
       },
@@ -299,9 +263,10 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
     return tenantCustomerToDetailRecord(row);
   }
 
-  async restoreLinkAndUpdate(input: RestoreTenantCustomerLinkInput) {
+  async restoreLinkAndUpdate(input: RestoreTenantCustomerLinkInput, tx?: OutboxTransaction) {
     return runWithBypassSoftDelete(async () => {
-      const row = await this.prisma.tenantCustomer.findFirst({
+      const client = resolveClient(this.prisma, tx);
+      const row = await client.tenantCustomer.findFirst({
         where: { id: input.id, tenantId: input.tenantId, globalCustomerId: input.globalCustomerId },
       });
 
@@ -321,12 +286,21 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
           tags: input.tags,
           preferredContactChannel: input.preferredContactChannel,
           marketingOptIn: input.marketingOptIn ?? undefined,
+          categoryId: input.categoryId,
+          assignedStaffId: input.assignedStaffId,
         });
+        if (input.isBlacklisted && input.blacklistReason) {
+          if (!entity.isBlacklisted) {
+            entity.blacklist(input.blacklistReason, input.restoredById);
+          }
+        } else if (entity.isBlacklisted) {
+          entity.removeBlacklist();
+        }
       } catch (error) {
         throw mapDomainError(error);
       }
 
-      const updated = await this.prisma.tenantCustomer.update({
+      const updated = await client.tenantCustomer.update({
         where: { id: input.id },
         data: {
           localCode: entity.localCode,
@@ -336,6 +310,13 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
           tags: [...entity.tags],
           preferredContactChannel: entity.preferredContactChannel,
           marketingOptIn: input.marketingOptIn ?? null,
+          categoryId: entity.categoryId,
+          assignedStaffId: entity.assignedStaffId,
+          status: entity.status,
+          isBlacklisted: entity.isBlacklisted,
+          blacklistReason: entity.blacklistReason,
+          blacklistedAt: entity.blacklistedAt,
+          blacklistedById: entity.blacklistedById,
           deletedAt: null,
           deletedById: null,
           deleteReason: null,
@@ -348,18 +329,56 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
     });
   }
 
-  async softDelete(command: {
-    id: string;
-    tenantId: string;
-    deletedById: string;
-    deleteReason?: string;
-  }): Promise<TenantCustomerRecord> {
-    const row = await this.prisma.tenantCustomer.findFirst({
-      where: { id: command.id, tenantId: command.tenantId, deletedAt: null },
+  async softDelete(
+    command: {
+      id: string;
+      tenantId: string;
+      deletedById: string;
+      deleteReason?: string;
+      expectedVersion?: number;
+    },
+    tx?: OutboxTransaction,
+  ): Promise<TenantCustomerRecord> {
+    const client = resolveClient(this.prisma, tx);
+    const row = await client.tenantCustomer.findFirst({
+      where: {
+        id: command.id,
+        tenantId: command.tenantId,
+        deletedAt: null,
+        ...(command.expectedVersion !== undefined ? { version: command.expectedVersion } : {}),
+      },
     });
 
     if (!row) {
-      throw new Error('Tenant customer not found for soft delete');
+      const current = await client.tenantCustomer.findFirst({
+        where: { id: command.id, tenantId: command.tenantId },
+      });
+
+      if (!current) {
+        throw new ApplicationError(
+          'CUSTOMER_NOT_FOUND',
+          'Customer was not found for this tenant.',
+          404,
+        );
+      }
+
+      if (current.deletedAt) {
+        throw new ApplicationError('ALREADY_DELETED', 'Customer is already deleted.', 409);
+      }
+
+      if (command.expectedVersion !== undefined) {
+        throw new ApplicationError(
+          'OPTIMISTIC_LOCK_CONFLICT',
+          'Customer was updated by another user. Refresh and try again.',
+          409,
+        );
+      }
+
+      throw new ApplicationError(
+        'CUSTOMER_NOT_FOUND',
+        'Customer was not found for this tenant.',
+        404,
+      );
     }
 
     const entity = this.toDomain(row);
@@ -370,7 +389,7 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
       throw mapDomainError(error);
     }
 
-    const updated = await this.prisma.tenantCustomer.update({
+    const updated = await client.tenantCustomer.update({
       where: { id: command.id },
       data: {
         deletedAt: entity.deletedAt,
@@ -384,6 +403,92 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
     return tenantCustomerToRecord(updated);
   }
 
+  async archive(
+    command: {
+      id: string;
+      tenantId: string;
+      archivedById: string;
+    },
+    tx?: OutboxTransaction,
+  ) {
+    const client = resolveClient(this.prisma, tx);
+    const row = await client.tenantCustomer.findFirst({
+      where: { id: command.id, tenantId: command.tenantId, deletedAt: null },
+    });
+
+    if (!row) {
+      throw new ApplicationError(
+        'CUSTOMER_NOT_FOUND',
+        'Customer was not found for this tenant.',
+        404,
+      );
+    }
+
+    const entity = this.toDomain(row);
+
+    try {
+      entity.archive(command.archivedById);
+    } catch (error) {
+      throw mapDomainError(error);
+    }
+
+    const updated = await client.tenantCustomer.update({
+      where: { id: command.id },
+      data: {
+        archivedAt: entity.archivedAt,
+        archivedById: entity.archivedById,
+        status: entity.status,
+        updatedById: command.archivedById,
+        version: { increment: 1 },
+      },
+    });
+
+    return tenantCustomerToDetailRecord(updated);
+  }
+
+  async unarchive(
+    command: {
+      id: string;
+      tenantId: string;
+      unarchivedById: string;
+    },
+    tx?: OutboxTransaction,
+  ) {
+    const client = resolveClient(this.prisma, tx);
+    const row = await client.tenantCustomer.findFirst({
+      where: { id: command.id, tenantId: command.tenantId, deletedAt: null },
+    });
+
+    if (!row) {
+      throw new ApplicationError(
+        'CUSTOMER_NOT_FOUND',
+        'Customer was not found for this tenant.',
+        404,
+      );
+    }
+
+    const entity = this.toDomain(row);
+
+    try {
+      entity.unarchive();
+    } catch (error) {
+      throw mapDomainError(error);
+    }
+
+    const updated = await client.tenantCustomer.update({
+      where: { id: command.id },
+      data: {
+        archivedAt: entity.archivedAt,
+        archivedById: entity.archivedById,
+        status: entity.status,
+        updatedById: command.unarchivedById,
+        version: { increment: 1 },
+      },
+    });
+
+    return tenantCustomerToDetailRecord(updated);
+  }
+
   async restore(command: {
     id: string;
     tenantId: string;
@@ -395,7 +500,18 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
       });
 
       if (!row) {
-        throw new Error('Deleted tenant customer not found for restore');
+        const active = await this.prisma.tenantCustomer.findFirst({
+          where: { id: command.id, tenantId: command.tenantId, deletedAt: null },
+        });
+        if (active) {
+          throw new ApplicationError('NOT_DELETED', 'Customer is not deleted.', 409);
+        }
+
+        throw new ApplicationError(
+          'CUSTOMER_NOT_FOUND',
+          'Customer was not found for this tenant.',
+          404,
+        );
       }
 
       const entity = this.toDomain(row);
@@ -449,55 +565,40 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
     tenantId: string,
     options: ListActiveTenantCustomersOptions,
   ): Promise<ListActiveTenantCustomersResult> {
-    const andFilters: Prisma.TenantCustomerWhereInput[] = [];
-    const scopeWhere = buildScopeWhere(options.scope);
+    const where = buildTenantCustomerListWhere(tenantId, options);
+    const includeDeleted = options.linkStatus === 'deleted';
 
-    if (scopeWhere) {
-      andFilters.push(scopeWhere);
-    }
-
-    if (options.listWhere) {
-      andFilters.push(options.listWhere as Prisma.TenantCustomerWhereInput);
-    } else if (options.search) {
-      andFilters.push(buildSearchWhere(options.search));
-    }
-
-    if (options.tags?.length) {
-      andFilters.push({ tags: { hasEvery: options.tags } });
-    }
-
-    if (options.ids?.length) {
-      andFilters.push({ id: { in: options.ids } });
-    }
-
-    const cursorWhere = buildCursorWhere(options);
-    if (cursorWhere) {
-      andFilters.push(cursorWhere);
-    }
-
-    const where: Prisma.TenantCustomerWhereInput = {
-      tenantId,
-      deletedAt: null,
-      ...(options.defaultBranchId ? { defaultBranchId: options.defaultBranchId } : {}),
-      ...(options.status === 'suspended'
-        ? { globalCustomer: { status: 'suspended', deletedAt: null } }
-        : { globalCustomer: { status: 'active', deletedAt: null } }),
-      ...(andFilters.length > 0 ? { AND: andFilters } : {}),
-    };
-
-    const [rows, total] = await Promise.all([
-      this.prisma.tenantCustomer.findMany({
+    const query = async () => {
+      const rows = await this.prisma.tenantCustomer.findMany({
         where,
         include: {
           globalCustomer: {
             select: globalCustomerListSelect,
           },
+          category: {
+            select: { id: true, name: true },
+          },
+          addresses: {
+            where: { deletedAt: null, isPrimary: true },
+            take: 1,
+            select: { city: true },
+          },
         },
-        orderBy: buildOrderBy(options.sort),
+        orderBy: buildTenantCustomerListOrderBy(options.sort),
         take: options.limit + 1,
-      }),
-      this.prisma.tenantCustomer.count({ where }),
-    ]);
+      });
+
+      const total =
+        options.includeCount === true
+          ? await this.prisma.tenantCustomer.count({ where })
+          : undefined;
+
+      return { rows, total };
+    };
+
+    const { rows, total } = includeDeleted
+      ? await runWithBypassSoftDelete(query)
+      : await query();
 
     const hasMore = rows.length > options.limit;
     const page = hasMore ? rows.slice(0, options.limit) : rows;
@@ -518,14 +619,20 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
         lastPurchaseAt: row.lastPurchaseAt,
         preferredContactChannel: row.preferredContactChannel,
         createdAt: row.createdAt,
+        categoryId: row.categoryId,
+        categoryName: row.category?.name ?? null,
+        primaryAddressCity: row.addresses[0]?.city ?? null,
+        linkStatus: resolveLinkStatus(row),
+        isBlacklisted: row.isBlacklisted,
       })),
       hasMore,
       total,
     };
   }
 
-  async updateLink(input: UpdateTenantCustomerLinkInput) {
-    const row = await this.prisma.tenantCustomer.findFirst({
+  async updateLink(input: UpdateTenantCustomerLinkInput, tx?: OutboxTransaction) {
+    const client = (tx ?? this.prisma) as PrismaService;
+    const row = await client.tenantCustomer.findFirst({
       where: {
         id: input.id,
         tenantId: input.tenantId,
@@ -535,7 +642,7 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
     });
 
     if (!row) {
-      const current = await this.prisma.tenantCustomer.findFirst({
+      const current = await client.tenantCustomer.findFirst({
         where: { id: input.id, tenantId: input.tenantId },
       });
 
@@ -569,12 +676,20 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
         tags: input.tags,
         preferredContactChannel: input.preferredContactChannel,
         marketingOptIn: input.marketingOptIn ?? undefined,
+        categoryId: input.categoryId,
+        assignedStaffId: input.assignedStaffId,
       });
+
+      if (input.isBlacklisted === true && input.blacklistReason) {
+        entity.blacklist(input.blacklistReason, input.updatedById);
+      } else if (input.isBlacklisted === false && entity.isBlacklisted) {
+        entity.removeBlacklist();
+      }
     } catch (error) {
       throw mapDomainError(error);
     }
 
-    const updated = await this.prisma.tenantCustomer.update({
+    const updated = await client.tenantCustomer.update({
       where: { id: input.id },
       data: {
         localCode: entity.localCode,
@@ -584,13 +699,46 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
         tags: [...entity.tags],
         preferredContactChannel: entity.preferredContactChannel,
         marketingOptIn: input.marketingOptIn ?? entity.marketingOptIn,
+        categoryId: entity.categoryId,
+        assignedStaffId: entity.assignedStaffId,
+        status: entity.status,
+        isBlacklisted: entity.isBlacklisted,
+        blacklistReason: entity.blacklistReason,
+        blacklistedAt: entity.blacklistedAt,
+        blacklistedById: entity.blacklistedById,
         ...(input.metadata !== undefined ? { metadata: input.metadata as object } : {}),
+        ...(input.creditScore !== undefined ? { creditScore: input.creditScore } : {}),
+        ...(input.overdueCount !== undefined ? { overdueCount: input.overdueCount } : {}),
+        ...(input.totalPurchaseRial !== undefined
+          ? { totalPurchaseRial: input.totalPurchaseRial }
+          : {}),
+        ...(input.lastPurchaseAt !== undefined ? { lastPurchaseAt: input.lastPurchaseAt } : {}),
         updatedById: input.updatedById,
         version: { increment: 1 },
       },
     });
 
     return tenantCustomerToDetailRecord(updated);
+  }
+
+  private buildLinkEntity(input: CreateTenantCustomerLinkInput): TenantCustomer {
+    const entity = TenantCustomer.link(input.tenantId, input.globalCustomerId, {
+      localCode: input.localCode,
+      notes: input.notes,
+      internalNotes: input.internalNotes,
+      defaultBranchId: input.defaultBranchId,
+      tags: input.tags,
+      preferredContactChannel: input.preferredContactChannel,
+      marketingOptIn: input.marketingOptIn ?? undefined,
+      categoryId: input.categoryId,
+      assignedStaffId: input.assignedStaffId,
+    });
+
+    if (input.isBlacklisted && input.blacklistReason) {
+      entity.blacklist(input.blacklistReason, input.createdById);
+    }
+
+    return entity;
   }
 
   private toDomain(row: {
@@ -607,21 +755,39 @@ export class PrismaTenantCustomerRepository implements ITenantCustomerRepository
     deletedAt: Date | null;
     deletedById: string | null;
     deleteReason: string | null;
+    categoryId?: string | null;
+    status?: 'active' | 'archived' | 'blacklisted';
+    isBlacklisted?: boolean;
+    blacklistReason?: string | null;
+    blacklistedAt?: Date | null;
+    blacklistedById?: string | null;
+    archivedAt?: Date | null;
+    archivedById?: string | null;
+    assignedStaffId?: string | null;
   }): TenantCustomer {
-    return new TenantCustomer(
-      row.id,
-      row.tenantId,
-      row.globalCustomerId,
-      row.localCode,
-      row.notes,
-      row.internalNotes,
-      row.defaultBranchId,
-      row.tags,
-      row.marketingOptIn ?? false,
-      row.preferredContactChannel,
-      row.deletedAt,
-      row.deletedById,
-      row.deleteReason,
-    );
+    return TenantCustomer.reconstitute({
+      id: row.id,
+      tenantId: row.tenantId,
+      globalCustomerId: row.globalCustomerId,
+      localCode: row.localCode,
+      notes: row.notes,
+      internalNotes: row.internalNotes,
+      defaultBranchId: row.defaultBranchId,
+      tags: row.tags,
+      marketingOptIn: row.marketingOptIn ?? false,
+      preferredContactChannel: row.preferredContactChannel,
+      deletedAt: row.deletedAt,
+      deletedById: row.deletedById,
+      deleteReason: row.deleteReason,
+      categoryId: row.categoryId ?? null,
+      status: row.status ?? 'active',
+      isBlacklisted: row.isBlacklisted ?? false,
+      blacklistReason: row.blacklistReason ?? null,
+      blacklistedAt: row.blacklistedAt ?? null,
+      blacklistedById: row.blacklistedById ?? null,
+      archivedAt: row.archivedAt ?? null,
+      archivedById: row.archivedById ?? null,
+      assignedStaffId: row.assignedStaffId ?? null,
+    });
   }
 }

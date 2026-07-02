@@ -5,8 +5,11 @@ import type {
   ListInstallmentsQueryOptions,
   ListInstallmentsResult,
   OutboxTransaction,
+  RegenerateInstallmentScheduleInput,
   SaveInstallmentPersistenceInput,
 } from '@hivork/application';
+import { ApplicationError } from '@hivork/application';
+import { calculateInstallmentSchedule } from '@hivork/domain';
 import { Injectable } from '@nestjs/common';
 import { Prisma, type Installment } from '@prisma/client';
 
@@ -250,6 +253,54 @@ export class PrismaInstallmentRepository implements IInstallmentRepository {
     });
 
     return rows.map(installmentToRecord);
+  }
+
+  async regeneratePendingAmounts(
+    input: RegenerateInstallmentScheduleInput,
+    tx?: OutboxTransaction,
+  ): Promise<InstallmentRecord[]> {
+    const client = resolveClient(this.prisma, tx);
+    const installments = await this.findBySaleId(input.tenantId, input.saleId, tx);
+
+    if (installments.length === 0) {
+      throw new ApplicationError('INSTALLMENT_NOT_FOUND', 'Sale has no installments.', 404);
+    }
+
+    const schedule = calculateInstallmentSchedule({
+      totalAmountRial: input.totalAmountRial,
+      downPaymentRial: input.downPaymentRial,
+      installmentCount: input.installmentCount,
+      firstDueDate: input.firstDueDate,
+      intervalDays: input.intervalDays,
+    });
+
+    const scheduleBySequence = new Map(schedule.map((item) => [item.sequenceNumber, item]));
+
+    const updatedRows = await Promise.all(
+      installments.map(async (installment) => {
+        if (installment.status === 'PAID' || installment.status === 'WAIVED') {
+          return installment;
+        }
+
+        const scheduled = scheduleBySequence.get(installment.sequenceNumber);
+        if (!scheduled) {
+          return installment;
+        }
+
+        const row = await client.installment.update({
+          where: { id: installment.id },
+          data: {
+            amountRial: scheduled.amountRial,
+            updatedById: input.updatedById,
+            version: { increment: 1 },
+          },
+        });
+
+        return installmentToRecord(row);
+      }),
+    );
+
+    return updatedRows;
   }
 
   async list(

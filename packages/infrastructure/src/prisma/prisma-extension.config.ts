@@ -19,6 +19,10 @@ export const SOFT_DELETE_MODELS = [
   'TenantSetting',
   'BranchSetting',
   'Sale',
+  'ContractAttachment',
+  'ContractGuarantor',
+  'ContractCollateral',
+  'SaleLineItem',
   'PaymentAttempt',
   'UserCredential',
   'UserMfaTotp',
@@ -31,7 +35,7 @@ export const SOFT_DELETE_MODELS = [
 export const SOFT_DELETE_EXEMPT_MODELS = ['AuditLog', 'OutboxEvent', 'RolePermission'] as const satisfies ReadonlyArray<Prisma.ModelName>;
 
 /** Financial history — no hard or soft delete (BR-016). */
-export const NO_DELETE_MODELS = ['Installment'] as const satisfies ReadonlyArray<Prisma.ModelName>;
+export const NO_DELETE_MODELS = ['Installment', 'ContractVersion'] as const satisfies ReadonlyArray<Prisma.ModelName>;
 
 export const TENANT_SCOPED_MODELS = [
   'Subscription',
@@ -43,6 +47,11 @@ export const TENANT_SCOPED_MODELS = [
   'AuditLog',
   'OutboxEvent',
   'Sale',
+  'ContractVersion',
+  'ContractAttachment',
+  'ContractGuarantor',
+  'ContractCollateral',
+  'SaleLineItem',
   'Installment',
   'PaymentAttempt',
   'StaffSession',

@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import type { IOutboxEventHandler } from '@hivork/application';
+
 import { PrismaService } from '../prisma/prisma.service.js';
 
 const DEFAULT_BATCH_SIZE = 25;
@@ -8,7 +10,10 @@ const DEFAULT_BATCH_SIZE = 25;
 export class OutboxProcessorService {
   private readonly logger = new Logger(OutboxProcessorService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly handlers: IOutboxEventHandler[] = [],
+  ) {}
 
   async processPendingBatch(batchSize = DEFAULT_BATCH_SIZE): Promise<number> {
     const events = await this.prisma.outboxEvent.findMany({
@@ -46,7 +51,18 @@ export class OutboxProcessorService {
         `Processing outbox event id=${event.id} type=${event.eventType} aggregate=${event.aggregateType}:${event.aggregateId}`,
       );
 
-      // Phase 2 — dispatch to registered event handlers
+      for (const handler of this.handlers) {
+        if (handler.supports(event.eventType)) {
+          await handler.handle({
+            id: event.id,
+            tenantId: event.tenantId,
+            eventType: event.eventType,
+            aggregateId: event.aggregateId,
+            aggregateType: event.aggregateType,
+            payload: (event.payload ?? {}) as Record<string, unknown>,
+          });
+        }
+      }
 
       await this.prisma.outboxEvent.update({
         where: { id: event.id },

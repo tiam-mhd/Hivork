@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@hivork/application": "workspace:*",
+    "@hivork/contracts": "workspace:*",
     "@hivork/domain": "workspace:*",
     "@hivork/module-core": "workspace:*",
     "@nestjs/common": "^10.4.20",
