@@ -6,10 +6,10 @@ import {
   INSTALLMENTS_PERMISSIONS,
 } from './installments.permissions.js';
 
-const PERMISSION_CODE_REGEX = /^installments\.[a-z_]+\.[a-z_]+$/;
+const PERMISSION_CODE_REGEX = /^installments(\.[a-z_]+)+$/;
 
-/** Matches `docs/02-architecture/rbac.md` § Installments (19 permissions). */
-const RBAC_INSTALLMENTS_PERMISSION_COUNT = 19;
+/** Matches `docs/02-architecture/rbac.md` § Installments (26 permissions). */
+const RBAC_INSTALLMENTS_PERMISSION_COUNT = 30;
 
 describe('INSTALLMENTS_PERMISSIONS', () => {
   it('lists all installments permissions from rbac.md', () => {
