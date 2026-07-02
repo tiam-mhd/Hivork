@@ -1,11 +1,11 @@
 'use client';
 
-import type { SaleSummaryDto } from '@hivork/contracts/installments';
+import type { SaleStatusDto } from '@hivork/contracts/installments';
 
 import { getSaleStatusPresentation } from '@/lib/sales/sale-status';
 
 type SaleStatusBadgeProps = {
-  status: SaleSummaryDto['status'];
+  status: SaleStatusDto;
 };
 
 export function SaleStatusBadge({ status }: SaleStatusBadgeProps) {

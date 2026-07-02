@@ -2,10 +2,11 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { buildDefaultColumnState } from '@/lib/data-table/column-personalization.utils';
 
 import { ColumnSettingsPanel } from './column-settings-panel';
 import type { DataTableColumnDef } from './types';
+
+import { buildDefaultColumnState } from '@/lib/data-table/column-personalization.utils';
 
 vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

@@ -1,6 +1,6 @@
+import type { FilterFieldDef } from '@hivork/contracts/ui';
 import { describe, expect, it } from 'vitest';
 
-import type { FilterFieldDef } from '@hivork/contracts/ui';
 
 import {
   countActiveFilterConditions,

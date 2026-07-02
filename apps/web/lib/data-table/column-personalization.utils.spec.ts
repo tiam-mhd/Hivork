@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import type { DataTableColumnDef } from '@/components/data-table/types';
-
 import {
   applyColumnPersonalization,
   buildDefaultColumnState,
@@ -10,6 +8,9 @@ import {
   reorderColumns,
   toggleColumnVisibility,
 } from './column-personalization.utils';
+
+import type { DataTableColumnDef } from '@/components/data-table/types';
+
 
 const COLUMNS: DataTableColumnDef<{ id: string }>[] = [
   { id: 'name', header: 'نام' },

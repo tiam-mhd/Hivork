@@ -7,7 +7,9 @@ import { TenantBadge } from './tenant-badge';
 import { UserMenu } from './user-menu';
 
 import { BrandMark } from '@/components/brand/brand-mark';
-import { ColorModeToggle } from '@/components/theme/color-mode-toggle';
+import { LocaleSwitcher } from '@/components/layout/locale-switcher';
+import { NotificationBell } from '@/components/layout/notification-bell';
+import { ThemeToggle } from '@/components/layout/theme-toggle';
 
 type AdminHeaderProps = {
   tenant: TenantResponseDto;
@@ -57,7 +59,9 @@ export function AdminHeader({
         <TenantBadge tenant={tenant} className="hidden sm:flex" />
 
         <div className="ms-auto flex items-center gap-2 sm:gap-3">
-          <ColorModeToggle className="hidden sm:inline-flex" />
+          <LocaleSwitcher className="hidden md:inline-flex" />
+          <ThemeToggle className="hidden sm:inline-flex" />
+          <NotificationBell />
           <BranchSwitcher
             branches={branchSwitcher.branches}
             activeBranchId={branchSwitcher.activeBranchId}

@@ -18,6 +18,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   overdue: 'معوقات',
   'today-due': 'سررسید امروز',
   reminders: 'یادآورها',
+  installments: 'اقساط',
   branches: 'شعب',
   staff: 'کارمندان',
   roles: 'نقش‌ها',

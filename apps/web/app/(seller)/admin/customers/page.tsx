@@ -17,19 +17,25 @@ import {
 import { CustomerListFilters } from '@/components/customers/customer-list-filters';
 import { DataTable, ExportButton, ViewSelector, type BulkAction } from '@/components/data-table';
 import { FilterBuilderButton, SavedFiltersDropdown } from '@/components/filter-builder';
-import { SearchInput } from '@/components/search-input';
 import { NoPermissionPage } from '@/components/layout/no-permission-page';
+import { SearchInput } from '@/components/search-input';
 import { useColumnPersonalization } from '@/hooks/use-column-personalization';
 import { useCustomersList } from '@/hooks/use-customers-list';
 import { useDataTableSelection } from '@/hooks/use-data-table-selection';
 import { usePermission } from '@/hooks/use-permission';
 import { useSavedFilters } from '@/hooks/use-saved-filters';
 import { useSavedViews } from '@/hooks/use-saved-views';
+import { useUndoManager } from '@/hooks/use-undo-manager';
+import {
+  bulkTagCustomers,
+  bulkUntagCustomers,
+  DEMO_BULK_TAG,
+} from '@/lib/api/customers-bulk';
+import { apiDownload, ApiClientError, triggerBrowserDownload } from '@/lib/api/download';
 import {
   CUSTOMER_FILTER_FIELDS,
   CUSTOMER_QUICK_FILTER_PRESETS,
 } from '@/lib/filter-fields/customers';
-import { apiDownload, ApiClientError, triggerBrowserDownload } from '@/lib/api/download';
 
 export default function CustomersListPage() {
   return (
@@ -65,6 +71,7 @@ function CustomersListContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const appliedDefaultViewRef = useRef(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const canCreate = usePermission('installments.customer.create');
@@ -72,6 +79,8 @@ function CustomersListContent() {
   const canUpdate = usePermission('installments.customer.update');
   const canRecycle = usePermission('core.recycle.view');
   const canView = usePermission('installments.customer.view');
+  const canExport = usePermission('installments.customer.export');
+  const { offerUndo } = useUndoManager();
 
   const {
     filters,
@@ -184,6 +193,8 @@ function CustomersListContent() {
       sort: filters.sort,
       tags: filters.tags.length > 0 ? filters.tags : undefined,
       locale: 'fa-IR',
+      branchId: undefined,
+      defaultBranchId: undefined,
     };
   }, [filterAst, filters.search, filters.sort, filters.tags]);
 
@@ -225,14 +236,26 @@ function CustomersListContent() {
         permission: 'installments.customer.update',
         requiresConfirm: true,
         confirmTitle: 'افزودن برچسب به {n} مشتری؟',
-        confirmDescription: 'این نسخه نمایشی است — API گروهی در فاز بعدی.',
+        confirmDescription: `برچسب «${DEMO_BULK_TAG}» به مشتریان انتخاب‌شده اضافه می‌شود.`,
         onExecute: async (rows) => {
-          setToast(`${rows.length} مشتری به‌روزرسانی شد (نمایشی)`);
+          const ids = rows.map((row) => row.id);
+          const result = await bulkTagCustomers({ ids, tag: DEMO_BULK_TAG });
+          offerUndo({
+            message: `برچسب به ${result.updatedCount} مشتری اضافه شد`,
+            onUndo: () =>
+              bulkUntagCustomers({
+                ids,
+                tag: DEMO_BULK_TAG,
+                isUndo: true,
+                originalAction: 'customer.bulk_tag',
+              }).then(() => undefined),
+            metadata: { action: 'customer.bulk_tag', entityIds: ids },
+          });
           clearSelection();
         },
       },
     ],
-    [buildExportRequest, clearSelection],
+    [buildExportRequest, clearSelection, offerUndo],
   );
 
   const customerQuickFilters = (
@@ -324,7 +347,7 @@ function CustomersListContent() {
     ) : null;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 print:gap-2">
       {toast ? (
         <div
           className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-foreground"
@@ -361,6 +384,12 @@ function CustomersListContent() {
         rowSelection={rowSelection}
         onRowSelectionChange={setRowSelection}
         bulkActions={bulkActions}
+        enableListShortcuts
+        searchInputRef={searchInputRef}
+        canListExport={canExport}
+        onListExport={() => {
+          document.querySelector<HTMLButtonElement>('[data-hivork-export-trigger="true"]')?.click();
+        }}
         emptyTitle={emptyVariant === 'no-results' ? 'نتیجه‌ای یافت نشد' : 'هنوز مشتری ثبت نکرده‌اید'}
         emptyDescription={
           emptyVariant === 'no-results'
@@ -369,13 +398,14 @@ function CustomersListContent() {
         }
         emptyAction={isEmpty ? emptyAction : undefined}
         renderMobileCard={renderCustomerMobileCard}
-        onRowClick={(row) => router.push(`/admin/customers/${row.id}/edit`)}
+        onRowClick={(row) => router.push(`/admin/customers/${row.id}`)}
         totalCount={total}
         loadedCount={displayedCount}
         toolbar={
           <div className="flex w-full flex-col gap-3">
             <div className="flex w-full flex-wrap items-center gap-3">
               <SearchInput
+                ref={searchInputRef}
                 value={filters.search}
                 onChange={setSearch}
                 isLoading={isSearching}

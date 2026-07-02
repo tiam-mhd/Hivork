@@ -55,4 +55,14 @@ test.describe('customer list page', () => {
 
     await expect(page.getByText('نتیجه‌ای یافت نشد')).toBeVisible({ timeout: 10_000 });
   });
+
+  test('row click navigates to detail', async ({ page, request }) => {
+    await loginAsOwner(page, request);
+    await page.goto('/admin/customers');
+
+    const firstRow = page.locator('tbody tr').first();
+    await expect(firstRow).toBeVisible({ timeout: 10_000 });
+    await firstRow.click();
+    await expect(page).toHaveURL(/\/admin\/customers\/[0-9a-f-]+$/);
+  });
 });

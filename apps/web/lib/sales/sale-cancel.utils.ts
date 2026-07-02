@@ -1,4 +1,4 @@
-import type { SaleDetailDto } from '@hivork/contracts/installments';
+import type { SaleDetailEnterpriseDto } from '@hivork/contracts/installments';
 
 export type SaleCancelEligibility = {
   allowed: boolean;
@@ -7,7 +7,7 @@ export type SaleCancelEligibility = {
 
 export function canCancelSale(
   hasCancelPermission: boolean,
-  sale: Pick<SaleDetailDto, 'status' | 'installments'> | null | undefined,
+  sale: Pick<SaleDetailEnterpriseDto, 'status' | 'installments'> | null | undefined,
 ): SaleCancelEligibility {
   if (!hasCancelPermission) {
     return { allowed: false };
@@ -34,13 +34,13 @@ export function canCancelSale(
   return { allowed: true };
 }
 
-export function formatSaleDisplayTitle(sale: Pick<SaleDetailDto, 'id' | 'title'>): string {
+export function formatSaleDisplayTitle(sale: Pick<SaleDetailEnterpriseDto, 'id' | 'title'>): string {
   if (sale.title?.trim()) {
     return sale.title.trim();
   }
   return `#${sale.id.slice(0, 8).toUpperCase()}`;
 }
 
-export function formatSaleHeading(sale: Pick<SaleDetailDto, 'id' | 'title'>): string {
+export function formatSaleHeading(sale: Pick<SaleDetailEnterpriseDto, 'id' | 'title'>): string {
   return `فروش ${formatSaleDisplayTitle(sale)}`;
 }

@@ -1,15 +1,9 @@
 'use client';
 
 import { cn } from '@hivork/ui';
+import { useTranslations } from 'next-intl';
 import { useCallback, useMemo, useRef, useState, type MouseEvent } from 'react';
-import {
-  applyRangeSelection,
-  countSelected,
-  getSelectableRowIds,
-  getSelectedRows,
-  toggleRowSelection,
-  toggleSelectAllLoaded,
-} from '@/lib/data-table/selection-utils';
+
 
 import { BulkActionBar, type BulkAction } from './bulk-action-bar';
 import { BulkConfirmDialog } from './bulk-confirm-dialog';
@@ -21,6 +15,17 @@ import { DataTablePagination } from './data-table-pagination';
 import { DataTableMobileSelectionCheckbox } from './data-table-selection-column';
 import { DataTableSkeleton } from './data-table-skeleton';
 import type { DataTableProps } from './types';
+
+import { useKeyboardShortcut } from '@/hooks/use-keyboard-shortcut';
+import {
+  applyRangeSelection,
+  countSelected,
+  getSelectableRowIds,
+  getSelectedRows,
+  toggleRowSelection,
+  toggleSelectAllLoaded,
+} from '@/lib/data-table/selection-utils';
+import { isInputFocused } from '@/lib/keyboard/focus-guard';
 
 function actionNeedsConfirm<T>(action: BulkAction<T>): boolean {
   return action.requiresConfirm === true || action.variant === 'destructive';
@@ -40,7 +45,7 @@ export function DataTable<T extends { id: string }>({
   sortDir,
   onSortChange,
   sortWhitelist,
-  emptyTitle = 'موردی یافت نشد',
+  emptyTitle,
   emptyDescription,
   emptyAction,
   toolbar,
@@ -59,7 +64,13 @@ export function DataTable<T extends { id: string }>({
   isRowSelectable,
   rowNotSelectableReason,
   bulkActions = [],
+  enableListShortcuts = false,
+  searchInputRef,
+  onListExport,
+  canListExport = false,
 }: DataTableProps<T>) {
+  const t = useTranslations('dataTable');
+  const resolvedEmptyTitle = emptyTitle ?? t('empty');
   const lastToggledIndexRef = useRef<number | null>(null);
   const [pendingAction, setPendingAction] = useState<BulkAction<T> | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
@@ -74,6 +85,26 @@ export function DataTable<T extends { id: string }>({
   );
 
   const selectedCount = useMemo(() => countSelected(rowSelection), [rowSelection]);
+
+  const focusSearch = useCallback(() => {
+    searchInputRef?.current?.focus();
+  }, [searchInputRef]);
+
+  useKeyboardShortcut('/', focusSearch, {
+    scope: 'list',
+    description: 'فوکوس جستجو',
+    descriptionEn: 'Focus search',
+    when: () => !isInputFocused(),
+    enabled: enableListShortcuts && Boolean(searchInputRef),
+  });
+
+  useKeyboardShortcut('Ctrl+Shift+E', () => onListExport?.(), {
+    scope: 'list',
+    description: 'خروجی Excel',
+    descriptionEn: 'Export to Excel',
+    when: () => canListExport && !isInputFocused(),
+    enabled: enableListShortcuts && Boolean(onListExport),
+  });
 
   const handleToggleSelectAll = useCallback(() => {
     if (!onRowSelectionChange) {
@@ -193,7 +224,7 @@ export function DataTable<T extends { id: string }>({
     return (
       <div className="flex flex-col gap-4">
         {toolbar ? <div className="flex flex-wrap items-center gap-2">{toolbar}</div> : null}
-        <DataTableError message={error?.message} onRetry={onRetry} />
+        <DataTableError message={error?.message ?? t('error')} onRetry={onRetry} retryLabel={t('retry')} />
       </div>
     );
   }
@@ -202,7 +233,7 @@ export function DataTable<T extends { id: string }>({
     return (
       <div className="flex flex-col gap-4">
         {toolbar ? <div className="flex flex-wrap items-center gap-2">{toolbar}</div> : null}
-        <DataTableEmpty title={emptyTitle} description={emptyDescription} action={emptyAction} />
+        <DataTableEmpty title={resolvedEmptyTitle} description={emptyDescription} action={emptyAction} />
       </div>
     );
   }

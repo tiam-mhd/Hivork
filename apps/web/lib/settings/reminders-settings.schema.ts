@@ -1,5 +1,6 @@
 import {
   DEFAULT_INSTALLMENTS_SETTINGS,
+  InstallmentsSettingsFieldsSchema,
   InstallmentsSettingsSchema,
   UpdateInstallmentsSettingsSchema,
   type InstallmentsSettingsDto,
@@ -20,7 +21,7 @@ export const REMINDER_CHANNEL_OPTIONS = [
   { value: 'sms' as const, label: 'پیامک' },
 ];
 
-export const RemindersSettingsFormSchema = InstallmentsSettingsSchema.pick({
+export const RemindersSettingsFormSchema = InstallmentsSettingsFieldsSchema.pick({
   reminder_days_before: true,
   reminder_on_due_date: true,
   overdue_escalation_days: true,

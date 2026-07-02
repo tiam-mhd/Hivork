@@ -3,8 +3,8 @@
 import type { ColumnPersonalization } from '@hivork/contracts/ui';
 import { useEffect } from 'react';
 
-import type { DataTableColumnDef } from './types';
 import { ColumnSettingsPanel } from './column-settings-panel';
+import type { DataTableColumnDef } from './types';
 
 type ColumnSettingsDrawerProps<T> = {
   open: boolean;

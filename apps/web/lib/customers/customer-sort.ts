@@ -1,5 +1,5 @@
-import type { DataTableSortDir } from '@hivork/contracts/ui';
 import type { TenantCustomerListSortDto } from '@hivork/contracts/customers';
+import type { DataTableSortDir } from '@hivork/contracts/ui';
 
 export const CUSTOMER_SORT_WHITELIST = [
   'createdAt',

@@ -1,6 +1,6 @@
 'use client';
 
-import type { SaleDetailDto } from '@hivork/contracts/installments';
+import type { SaleDetailEnterpriseDto } from '@hivork/contracts/installments';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useApiError } from '@/hooks/use-api-error';
@@ -9,7 +9,7 @@ import { cancelSale, fetchSaleDetail } from '@/lib/api/sale-detail';
 
 export function useSaleDetail(saleId: string) {
   const { resolve } = useApiError();
-  const [sale, setSale] = useState<SaleDetailDto | null>(null);
+  const [sale, setSale] = useState<SaleDetailEnterpriseDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);

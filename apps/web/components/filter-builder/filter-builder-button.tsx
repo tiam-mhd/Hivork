@@ -5,13 +5,14 @@ import { formatPersianDigits } from '@hivork/i18n';
 import { Button, cn } from '@hivork/ui';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { FilterBuilder } from './filter-builder';
+
 import {
   countActiveFilterConditions,
   createEmptyFilterAst,
   validateFilterAstForApply,
 } from '@/lib/filter/filter-ast.utils';
 
-import { FilterBuilder } from './filter-builder';
 
 type FilterBuilderButtonProps = {
   fields: FilterFieldDef[];

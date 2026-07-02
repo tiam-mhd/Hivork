@@ -49,7 +49,7 @@ export function MobileNavDrawer({ open, onClose }: MobileNavDrawerProps) {
   return (
     <dialog
       ref={dialogRef}
-      className="layout-drawer layout-glass-panel m-0 h-full max-h-none w-drawer max-w-none border p-0 shadow-[var(--layout-drawer-shadow)] open:animate-in"
+      className="layout-drawer layout-glass-panel fixed start-0 top-0 m-0 h-full max-h-none w-drawer max-w-none border p-0 shadow-[var(--layout-drawer-shadow)] open:animate-in"
       onCancel={(event) => {
         event.preventDefault();
         onClose();

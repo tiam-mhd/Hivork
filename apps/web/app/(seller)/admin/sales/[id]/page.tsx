@@ -9,12 +9,12 @@ import { RequirePermission } from '@/components/auth/require-permission';
 import { useBreadcrumbOverride } from '@/components/layout/breadcrumb-override';
 import { NoPermissionPage } from '@/components/layout/no-permission-page';
 import { CancelSaleModal } from '@/components/sales/cancel-sale-modal';
-import { InstallmentTable, InstallmentTableSkeleton } from '@/components/sales/installment-table';
+import { ContractDetailTabs } from '@/components/sales/contract-detail-tabs';
+import { ContractLifecycleActions } from '@/components/sales/contract-lifecycle-actions';
 import { SaleDetailHeader, SaleDetailHeaderSkeleton } from '@/components/sales/sale-detail-header';
 import { usePermission } from '@/hooks/use-permission';
 import { useSaleDetail } from '@/hooks/use-sale-detail';
 import { useAdminSession } from '@/lib/layout/admin-session-context';
-import { formatSaleHeading } from '@/lib/sales/sale-cancel.utils';
 
 export default function SaleDetailPage() {
   return (
@@ -29,7 +29,9 @@ function SaleDetailContent() {
   const saleId = params.id;
   const { branches } = useAdminSession();
   const canCancel = usePermission('installments.sale.cancel');
+  const canEdit = usePermission('installments.sale.edit');
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [actionToast, setActionToast] = useState<string | null>(null);
 
   const {
     sale,
@@ -44,16 +46,19 @@ function SaleDetailContent() {
     clearToast,
   } = useSaleDetail(saleId);
 
-  useBreadcrumbOverride(sale ? formatSaleHeading(sale) : null);
+  useBreadcrumbOverride(sale ? sale.contractNumber ?? sale.title ?? 'قرارداد' : null);
 
   useEffect(() => {
-    if (!toast) {
+    if (!toast && !actionToast) {
       return;
     }
 
-    const timer = window.setTimeout(() => clearToast(), 5000);
+    const timer = window.setTimeout(() => {
+      clearToast();
+      setActionToast(null);
+    }, 5000);
     return () => window.clearTimeout(timer);
-  }, [clearToast, toast]);
+  }, [actionToast, clearToast, toast]);
 
   if (forbidden) {
     return <NoPermissionPage required="installments.sale.view" />;
@@ -63,7 +68,7 @@ function SaleDetailContent() {
     return (
       <div className="flex flex-col gap-6">
         <SaleDetailHeaderSkeleton />
-        <InstallmentTableSkeleton />
+        <div className="h-80 animate-pulse rounded-xl border border-border bg-muted/20" />
       </div>
     );
   }
@@ -71,8 +76,8 @@ function SaleDetailContent() {
   if (notFound) {
     return (
       <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border bg-card/40 px-6 py-16 text-center">
-        <h1 className="text-xl font-semibold text-foreground">فروش یافت نشد</h1>
-        <p className="text-sm text-muted-foreground">این فروش وجود ندارد یا به آن دسترسی ندارید.</p>
+        <h1 className="text-xl font-semibold text-foreground">قرارداد یافت نشد</h1>
+        <p className="text-sm text-muted-foreground">این قرارداد وجود ندارد یا به آن دسترسی ندارید.</p>
         <Button asChild variant="outline">
           <Link href="/admin/sales">بازگشت به لیست فروش‌ها</Link>
         </Button>
@@ -103,12 +108,12 @@ function SaleDetailContent() {
 
   return (
     <div className="flex flex-col gap-6">
-      {toast ? (
+      {toast || actionToast ? (
         <p
           className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200"
           role="status"
         >
-          {toast}
+          {actionToast ?? toast}
         </p>
       ) : null}
 
@@ -118,16 +123,8 @@ function SaleDetailContent() {
         canCancelPermission={canCancel}
         onCancelClick={() => setCancelModalOpen(true)}
       />
-
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-lg font-semibold text-foreground">اقساط</h2>
-          <p className="text-sm text-muted-foreground">
-            {sale.installments.length} قسط
-          </p>
-        </div>
-        <InstallmentTable sale={sale} />
-      </section>
+      <ContractLifecycleActions sale={sale} onUpdated={reload} onToast={setActionToast} />
+      <ContractDetailTabs sale={sale} canEdit={canEdit} />
 
       <CancelSaleModal
         open={cancelModalOpen}

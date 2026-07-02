@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Input, Label } from '@hivork/ui';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useId, useState } from 'react';
 
 import { shouldCommitSearchTerm } from '@/lib/search';
 
@@ -17,17 +17,20 @@ export type SearchInputProps = {
   'aria-label'?: string;
 };
 
-export function SearchInput({
-  value,
-  onChange,
-  debounceMs = 300,
-  minLength = 2,
-  placeholder = 'جستجو نام، موبایل، کد…',
-  isLoading = false,
-  disabled = false,
-  id: idProp,
-  'aria-label': ariaLabel = 'جستجو',
-}: SearchInputProps) {
+export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput(
+  {
+    value,
+    onChange,
+    debounceMs = 300,
+    minLength = 2,
+    placeholder = 'جستجو نام، موبایل، کد…',
+    isLoading = false,
+    disabled = false,
+    id: idProp,
+    'aria-label': ariaLabel = 'جستجو',
+  },
+  ref,
+) {
   const generatedId = useId();
   const inputId = idProp ?? generatedId;
   const [draft, setDraft] = useState(value);
@@ -65,6 +68,7 @@ export function SearchInput({
         {ariaLabel}
       </Label>
       <Input
+        ref={ref}
         id={inputId}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
@@ -123,4 +127,4 @@ export function SearchInput({
       </div>
     </div>
   );
-}
+});

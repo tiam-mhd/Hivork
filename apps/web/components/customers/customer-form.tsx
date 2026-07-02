@@ -6,6 +6,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Select,
 import Link from 'next/link';
 import { useCallback, useId, useRef, useState, type ReactNode } from 'react';
 
+import { CustomerAddressesSection } from '@/components/customers/customer-addresses-section';
 import { CustomerStatsPanel } from '@/components/customers/customer-stats-panel';
 import { TagsInput } from '@/components/customers/tags-input';
 import { JalaliDatePicker } from '@/components/form/jalali-date-picker';
@@ -18,6 +19,7 @@ import {
   type CustomerFormFieldErrors,
   type CustomerFormMode,
   type CustomerFormValues,
+  hasFormErrors,
   validateCustomerForm,
 } from '@/lib/schemas/customer-form.schema';
 
@@ -110,9 +112,9 @@ export function CustomerForm({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const validationErrors = validateCustomerForm(mode, values);
-    if (Object.keys(validationErrors).length > 0) {
+    if (hasFormErrors(validationErrors)) {
       setLocalErrors(validationErrors);
-      const firstKey = Object.keys(validationErrors)[0];
+      const firstKey = Object.keys(validationErrors).find((key) => key !== 'addressErrors');
       if (firstKey) {
         const element = document.getElementById(`${formId}-${firstKey}`);
         element?.focus();
@@ -296,7 +298,7 @@ export function CustomerForm({
           <FormField
             label="آدرس"
             htmlFor={`${formId}-address`}
-            help="آدرس محل سکونت یا کار"
+            help="آدرس متنی ساده — برای آدرس با نقشه از بخش زیر استفاده کنید"
           >
             <Textarea
               id={`${formId}-address`}
@@ -307,6 +309,20 @@ export function CustomerForm({
               onChange={(event) => setField('address', event.target.value)}
             />
           </FormField>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/80 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">آدرس‌های ساخت‌یافته</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CustomerAddressesSection
+            addresses={values.addresses}
+            disabled={loading}
+            addressErrors={errors.addressErrors}
+            onChange={(addresses) => setField('addresses', addresses)}
+          />
         </CardContent>
       </Card>
 

@@ -7,9 +7,10 @@ import type {
 } from '@hivork/contracts/ui';
 import { Button, cn } from '@hivork/ui';
 
+import { FilterConditionRow } from './filter-condition-row';
+
 import { createEmptyCondition, createEmptyGroup } from '@/lib/filter/filter-ast.utils';
 
-import { FilterConditionRow } from './filter-condition-row';
 
 type FilterGroupEditorProps = {
   fields: FilterFieldDef[];

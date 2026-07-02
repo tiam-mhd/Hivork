@@ -18,7 +18,6 @@ export function PrintHeader({ title, tenant, locale, generatedAt }: PrintHeaderP
     <header className="print-header">
       <div className="print-header__brand">
         {tenant.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img className="print-header__logo" src={tenant.logoUrl} alt="" />
         ) : null}
         <div>

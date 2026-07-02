@@ -44,7 +44,9 @@ test.describe('sale detail page', () => {
     await page.getByText('فروش نمونه اقساط').click();
     await expect(page).toHaveURL(/\/admin\/sales\/[0-9a-f-]{36}/);
     await expect(page.getByRole('heading', { name: /فروش نمونه اقساط/ })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'اقساط' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'خلاصه' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'اقلام' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'نسخه‌ها' })).toBeVisible();
     await expect(page.getByText('در انتظار').first()).toBeVisible();
   });
 

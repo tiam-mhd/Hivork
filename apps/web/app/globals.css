@@ -2,6 +2,8 @@
 @config '../tailwind.config.ts';
 @import '@hivork/ui/styles.css';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Default tokens — overridden at runtime by @hivork/theme ThemeProvider */
 :root {
   color-scheme: light;
@@ -127,6 +129,7 @@
 }
 
 /* Dark mode fallbacks — overridden at runtime by ThemeProvider */
+.dark,
 [data-theme-color-mode='dark'] {
   color-scheme: dark;
   --background: 0 0% 5%;
@@ -211,6 +214,37 @@ body {
 
 [data-theme-color-mode='dark'] .layout-header {
   box-shadow: var(--layout-header-shadow);
+}
+
+.dark .layout-header {
+  box-shadow: var(--layout-header-shadow);
+}
+
+/* Focus rings — WCAG AA contrast in dark mode */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+@media print {
+  :root,
+  .dark {
+    color-scheme: light !important;
+  }
+
+  html.dark {
+    color-scheme: light !important;
+  }
+
+  html.dark,
+  html {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 7%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 7%;
+    --border: 30 15% 88%;
+    --layout-main-bg: 0 0% 100%;
+  }
 }
 
 .layout-main {

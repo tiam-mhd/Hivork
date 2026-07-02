@@ -72,15 +72,28 @@ test.describe('customer create/edit', () => {
     await expect(page).toHaveURL(/\/admin\/customers/, { timeout: 15_000 });
 
     await page.getByLabel('جستجو').fill(phone);
-    await page.locator('tr', { hasText: originalName }).getByLabel('عملیات').click();
+    await page.locator('tr', { hasText: originalName }).click();
+    await page.waitForURL(/\/admin\/customers\/.+$/);
+    await expect(page.getByRole('heading', { name: originalName })).toBeVisible();
+
     await page.getByRole('link', { name: 'ویرایش' }).click();
     await page.waitForURL(/\/admin\/customers\/.+\/edit/);
 
     await page.getByLabel('نام و نام خانوادگی', { exact: false }).fill(updatedName);
     await page.getByRole('button', { name: 'ذخیره تغییرات' }).click();
 
-    await expect(page).toHaveURL(/\/admin\/customers/, { timeout: 15_000 });
-    await page.getByLabel('جستجو').fill(phone);
-    await expect(page.getByText(updatedName)).toBeVisible({ timeout: 10_000 });
+    await expect(page).toHaveURL(/\/admin\/customers\/.+$/, { timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: updatedName })).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('row click opens detail page', async ({ page, request }) => {
+    await loginAsOwner(page, request);
+    await page.goto('/admin/customers');
+
+    const firstViewLink = page.getByRole('link', { name: 'مشاهده' }).first();
+    await expect(firstViewLink).toBeVisible({ timeout: 10_000 });
+    await firstViewLink.click();
+    await expect(page).toHaveURL(/\/admin\/customers\/[0-9a-f-]+$/);
+    await expect(page.getByRole('tablist', { name: 'بخش‌های جزئیات مشتری' })).toBeVisible();
   });
 });

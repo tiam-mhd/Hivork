@@ -1,13 +1,14 @@
 'use client';
 
-import type { ReactNode } from 'react';
 
 import type { TenantCustomerListItemDto } from '@hivork/contracts/customers';
 import { formatIsoDateAsJalali, formatPersianDigits } from '@hivork/i18n';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
-import type { DataTableColumnDef } from '@/components/data-table';
+import { CustomerStatusBadge } from '@/components/customers/customer-status-badge';
 import { TagBadge } from '@/components/customers/tag-badge';
+import type { DataTableColumnDef } from '@/components/data-table';
 import { maskPhone } from '@/lib/auth/phone-utils';
 
 function formatCustomerName(name: string | null): string {
@@ -47,6 +48,12 @@ export function createCustomerListColumns(
       cell: ({ row }) => row.localCode ?? '—',
     },
     {
+      id: 'categoryName',
+      header: 'دسته‌بندی',
+      hideOnMobile: true,
+      cell: ({ row }) => row.categoryName ?? '—',
+    },
+    {
       id: 'tags',
       header: 'برچسب',
       hideOnMobile: true,
@@ -60,6 +67,21 @@ export function createCustomerListColumns(
         ) : (
           '—'
         ),
+    },
+    {
+      id: 'creditScore',
+      header: 'امتیاز',
+      align: 'end',
+      hideOnMobile: true,
+      cell: ({ row }) => formatPersianDigits(row.creditScore),
+    },
+    {
+      id: 'linkStatus',
+      header: 'وضعیت',
+      hideOnMobile: true,
+      cell: ({ row }) => (
+        <CustomerStatusBadge linkStatus={row.linkStatus} isBlacklisted={row.isBlacklisted} />
+      ),
     },
     {
       id: 'overdueCount',
@@ -89,13 +111,24 @@ export function createCustomerListColumns(
       width: '4.5rem',
       enableHiding: false,
       cell: ({ row }) => (
-        <Link
-          href={`/admin/customers/${row.id}/edit`}
-          className="text-sm text-primary hover:underline"
-          onClick={(event) => event.stopPropagation()}
-        >
-          {canUpdate ? 'ویرایش' : 'مشاهده'}
-        </Link>
+        <div className="flex flex-col items-end gap-1">
+          <Link
+            href={`/admin/customers/${row.id}`}
+            className="text-sm text-primary hover:underline"
+            onClick={(event) => event.stopPropagation()}
+          >
+            مشاهده
+          </Link>
+          {canUpdate ? (
+            <Link
+              href={`/admin/customers/${row.id}/edit`}
+              className="text-xs text-muted-foreground hover:underline"
+              onClick={(event) => event.stopPropagation()}
+            >
+              ویرایش
+            </Link>
+          ) : null}
+        </div>
       ),
     },
   ];
@@ -106,13 +139,15 @@ export function renderCustomerMobileCard(row: TenantCustomerListItemDto): ReactN
     <div className="flex flex-col gap-2 text-sm">
       <div className="flex items-start justify-between gap-2">
         <p className="font-medium text-foreground">{formatCustomerName(row.globalCustomer.name)}</p>
-        <span className="tabular-nums text-muted-foreground">
-          معوقات: {formatPersianDigits(row.overdueCount)}
-        </span>
+        <CustomerStatusBadge linkStatus={row.linkStatus} isBlacklisted={row.isBlacklisted} />
       </div>
       <p className="font-mono text-muted-foreground" dir="ltr">
         {maskPhone(row.globalCustomer.phone)}
       </p>
+      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+        <span>امتیاز: {formatPersianDigits(row.creditScore)}</span>
+        <span>معوقات: {formatPersianDigits(row.overdueCount)}</span>
+      </div>
       {row.tags.length > 0 ? (
         <div className="flex flex-wrap gap-1">
           {row.tags.map((tag) => (

@@ -2,13 +2,13 @@
 
 import type { SavedFilterItemDto, SavedFilterResourceKeyDto } from '@hivork/contracts/core';
 import type { FilterAst } from '@hivork/contracts/ui';
+import type { FilterFieldDef } from '@hivork/contracts/ui';
 import { Button, Input, Label, Textarea } from '@hivork/ui';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { useSavedFilters } from '@/hooks/use-saved-filters';
 import { ApiClientError } from '@/lib/api/client';
 import { validateFilterAstForApply } from '@/lib/filter/filter-ast.utils';
-import type { FilterFieldDef } from '@hivork/contracts/ui';
 
 type SavedFiltersDropdownProps = {
   resourceKey: SavedFilterResourceKeyDto;

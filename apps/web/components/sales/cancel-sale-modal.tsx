@@ -1,6 +1,6 @@
 'use client';
 
-import type { SaleDetailDto } from '@hivork/contracts/installments';
+import type { SaleDetailEnterpriseDto } from '@hivork/contracts/installments';
 import { Button, Input, Label } from '@hivork/ui';
 import { useEffect, useId, useRef, useState } from 'react';
 
@@ -11,7 +11,7 @@ const MAX_REASON_LENGTH = 500;
 
 type CancelSaleModalProps = {
   open: boolean;
-  sale: SaleDetailDto;
+  sale: SaleDetailEnterpriseDto;
   loading?: boolean;
   onClose: () => void;
   onConfirm: (reason: string) => void | Promise<void>;

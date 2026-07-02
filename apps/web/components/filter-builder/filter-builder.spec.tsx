@@ -1,12 +1,13 @@
+import type { FilterFieldDef } from '@hivork/contracts/ui';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { FilterFieldDef } from '@hivork/contracts/ui';
+
+import { FilterBuilder } from './filter-builder';
 
 import { createEmptyFilterAst } from '@/lib/filter/filter-ast.utils';
 
-import { FilterBuilder } from './filter-builder';
 
 const FIELDS: FilterFieldDef[] = [
   { id: 'name', label: 'نام', type: 'string' },

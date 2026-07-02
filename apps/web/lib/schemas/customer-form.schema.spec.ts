@@ -42,4 +42,30 @@ describe('customer form schema', () => {
     };
     expect(buildUpdatePatch(values, values, 2)).toBeNull();
   });
+
+  it('includes addresses with coordinates in create dto', () => {
+    const dto = formValuesToCreateDto({
+      ...EMPTY_CUSTOMER_FORM_VALUES,
+      phone: '09121234567',
+      name: 'حسین احمدی',
+      addresses: [
+        {
+          clientKey: 'a1',
+          label: 'home',
+          line1: 'خیابان ولیعصر',
+          line2: '',
+          city: 'تهران',
+          province: '',
+          postalCode: '',
+          isPrimary: true,
+          latitude: 35.6892,
+          longitude: 51.389,
+        },
+      ],
+    });
+
+    expect(dto.addresses).toHaveLength(1);
+    expect(dto.addresses?.[0]?.latitude).toBe(35.6892);
+    expect(dto.addresses?.[0]?.longitude).toBe(51.389);
+  });
 });

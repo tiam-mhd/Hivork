@@ -1,6 +1,5 @@
 'use client';
 
-import type { ColumnPersonalization } from '@hivork/contracts/ui';
 import {
   closestCenter,
   DndContext,
@@ -17,7 +16,9 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import type { ColumnPersonalization } from '@hivork/contracts/ui';
 import { Button, Checkbox, cn } from '@hivork/ui';
+
 import type { DataTableColumnDef } from './types';
 
 import {

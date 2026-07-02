@@ -1,7 +1,7 @@
 'use client';
 
-import type { ExportCustomersRequestDto } from '@hivork/contracts/customers';
 import type { CreatePrintSnapshotDto, ExportFormatDto } from '@hivork/contracts/core';
+import type { ExportCustomersRequestDto } from '@hivork/contracts/customers';
 import { Button, cn } from '@hivork/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -150,6 +150,7 @@ export function ExportButton({
         variant="outline"
         size="sm"
         className="h-10 gap-1.5"
+        data-hivork-export-trigger="true"
         disabled={disabled || busy}
         aria-busy={busy}
         aria-expanded={open}

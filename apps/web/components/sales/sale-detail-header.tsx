@@ -2,7 +2,7 @@
 
 
 import type { BranchListItemDto } from '@hivork/contracts';
-import type { SaleDetailDto } from '@hivork/contracts/installments';
+import type { SaleDetailEnterpriseDto } from '@hivork/contracts/installments';
 import { formatIsoDateAsJalali, formatPersianDigits, formatToman } from '@hivork/i18n';
 import { Button, Card, CardContent } from '@hivork/ui';
 import Link from 'next/link';
@@ -13,7 +13,7 @@ import { maskPhone } from '@/lib/auth/phone-utils';
 import { canCancelSale, formatSaleHeading } from '@/lib/sales/sale-cancel.utils';
 
 type SaleDetailHeaderProps = {
-  sale: SaleDetailDto;
+  sale: SaleDetailEnterpriseDto;
   branches: BranchListItemDto[];
   canCancelPermission: boolean;
   onCancelClick: () => void;
@@ -44,8 +44,10 @@ export function SaleDetailHeader({
 }: SaleDetailHeaderProps) {
   const cancelEligibility = canCancelSale(canCancelPermission, sale);
   const customer = sale.customer;
-  const customerHref = `/admin/customers/${sale.tenantCustomerId}/edit`;
+  const customerHref = `/admin/customers/${sale.tenantCustomerId}`;
   const paidCount = sale.installments.filter((item) => item.status === 'paid').length;
+  const heading = sale.contractNumber?.trim() || formatSaleHeading(sale);
+  const isArchived = sale.status === 'archived' || Boolean(sale.archivedAt);
 
   return (
     <div className="flex flex-col gap-4">
@@ -58,10 +60,15 @@ export function SaleDetailHeader({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-2">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            {formatSaleHeading(sale)}
+            {heading}
           </h1>
           <div className="flex flex-wrap items-center gap-2">
             <SaleStatusBadge status={sale.status} />
+            {sale.contractNumber ? (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {sale.contractNumber}
+              </span>
+            ) : null}
             <span className="text-sm text-muted-foreground">
               {formatPersianDigits(paidCount)}/{formatPersianDigits(sale.installmentCount)} قسط
               پرداخت‌شده
@@ -69,15 +76,25 @@ export function SaleDetailHeader({
           </div>
         </div>
 
-        {cancelEligibility.allowed ? (
-          <Button type="button" variant="outline" className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10" onClick={onCancelClick}>
-            لغو فروش
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="no-print shrink-0"
+            onClick={() => window.print()}
+          >
+            چاپ قرارداد
           </Button>
-        ) : cancelEligibility.reason && canCancelPermission && sale.status === 'active' ? (
-          <span className="text-sm text-muted-foreground" title={cancelEligibility.reason}>
-            لغو فروش غیرفعال است
-          </span>
-        ) : null}
+          {cancelEligibility.allowed ? (
+            <Button type="button" variant="outline" className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10" onClick={onCancelClick}>
+              لغو فروش
+            </Button>
+          ) : cancelEligibility.reason && canCancelPermission && sale.status === 'active' ? (
+            <span className="text-sm text-muted-foreground" title={cancelEligibility.reason}>
+              لغو فروش غیرفعال است
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {sale.status === 'cancelled' ? (
@@ -86,6 +103,12 @@ export function SaleDetailHeader({
           {sale.cancelReason ? (
             <span className="mt-1 block text-foreground/80">دلیل: {sale.cancelReason}</span>
           ) : null}
+        </div>
+      ) : null}
+
+      {isArchived ? (
+        <div className="rounded-xl border border-banner-trial-border bg-banner-trial px-4 py-3 text-sm text-banner-trial-foreground">
+          این قرارداد بایگانی شده است و امکان ویرایش آن وجود ندارد.
         </div>
       ) : null}
 

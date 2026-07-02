@@ -9,10 +9,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RequirePermission } from '@/components/auth/require-permission';
 import { CustomerTableSkeleton } from '@/components/customers/customer-empty-state';
 import { CustomerForm } from '@/components/customers/customer-form';
+import { OptimisticLockDialog } from '@/components/customers/optimistic-lock-dialog';
 import { useBreadcrumbOverride } from '@/components/layout/breadcrumb-override';
 import { NoPermissionPage } from '@/components/layout/no-permission-page';
 import { useApiError } from '@/hooks/use-api-error';
 import { apiFetch, ApiClientError } from '@/lib/api/client';
+import { fetchCustomerDetail } from '@/lib/api/customers';
 import { useAdminSession } from '@/lib/layout/admin-session-context';
 import {
   buildUpdatePatch,
@@ -46,6 +48,8 @@ function EditCustomerContent() {
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<CustomerFormFieldErrors>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [optimisticLockOpen, setOptimisticLockOpen] = useState(false);
+  const [reloadingAfterConflict, setReloadingAfterConflict] = useState(false);
 
   const activeBranches = useMemo(
     () => branches.filter((branch) => branch.isActive),
@@ -58,7 +62,7 @@ function EditCustomerContent() {
     setForbidden(false);
 
     try {
-      const response = await apiFetch<TenantCustomerDetailResponseDto>(`/customers/${customerId}`);
+      const response = await fetchCustomerDetail(customerId);
       setDetail(response);
       setInitialValues(detailToFormValues(response));
     } catch (err) {
@@ -87,6 +91,18 @@ function EditCustomerContent() {
       : null;
   useBreadcrumbOverride(breadcrumbLabel);
 
+  const handleReloadAfterConflict = useCallback(async () => {
+    setReloadingAfterConflict(true);
+    try {
+      await loadDetail();
+      setOptimisticLockOpen(false);
+      setFormError(null);
+      setFieldErrors({});
+    } finally {
+      setReloadingAfterConflict(false);
+    }
+  }, [loadDetail]);
+
   async function handleSubmit(values: CustomerFormValues) {
     if (!detail || !initialValues) {
       return;
@@ -94,7 +110,7 @@ function EditCustomerContent() {
 
     const patch = buildUpdatePatch(initialValues, values, detail.version);
     if (!patch) {
-      router.push('/admin/customers');
+      router.push(`/admin/customers/${customerId}`);
       return;
     }
 
@@ -110,12 +126,12 @@ function EditCustomerContent() {
 
       setSuccessMessage('تغییرات با موفقیت ذخیره شد.');
       window.setTimeout(() => {
-        router.push('/admin/customers');
+        router.push(`/admin/customers/${customerId}`);
       }, 1200);
     } catch (err) {
       if (err instanceof ApiClientError) {
         if (err.code === 'OPTIMISTIC_LOCK_CONFLICT') {
-          setFormError('اطلاعات توسط شخص دیگری به‌روزرسانی شده. لطفاً صفحه را بازخوانی کنید.');
+          setOptimisticLockOpen(true);
         } else {
           const mapped = mapApiErrorToFieldErrors(err.code, err.message, err.details);
           if (Object.keys(mapped).length > 0) {
@@ -191,8 +207,15 @@ function EditCustomerContent() {
         loading={loadingSave}
         formError={formError}
         fieldErrors={fieldErrors}
-        title={`ویرایش مشتری`}
+        title="ویرایش مشتری"
         onSubmit={handleSubmit}
+      />
+
+      <OptimisticLockDialog
+        open={optimisticLockOpen}
+        loading={reloadingAfterConflict}
+        onReload={() => void handleReloadAfterConflict()}
+        onClose={() => setOptimisticLockOpen(false)}
       />
     </div>
   );

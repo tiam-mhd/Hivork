@@ -1,10 +1,15 @@
 'use client';
 
+import type { ThemeModePreference } from '@hivork/contracts/theme';
 import { ThemePreviewCard, useTheme } from '@hivork/theme/react';
 import { useEffect, useState } from 'react';
 
+import { themeModeLabel } from '@/hooks/use-tenant-theme-sync';
+
+const THEME_MODES: ThemeModePreference[] = ['light', 'dark', 'system'];
+
 function ColorModeSelector() {
-  const { colorMode, setColorMode } = useTheme();
+  const { themeMode, setThemeMode } = useTheme();
 
   return (
     <section
@@ -15,23 +20,23 @@ function ColorModeSelector() {
         حالت رنگ
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        هر تم شامل نسخه روشن و تاریک است. حالت انتخابی روی تم فعال اعمال می‌شود.
+        هر تم شامل نسخه روشن و تاریک است. حالت «سیستم» ترجیح سیستم‌عامل را دنبال می‌کند.
       </p>
 
-      <div className="mt-4 inline-flex rounded-lg border border-border bg-muted/40 p-1">
-        {(['light', 'dark'] as const).map((mode) => (
+      <div className="mt-4 inline-flex flex-wrap rounded-lg border border-border bg-muted/40 p-1">
+        {THEME_MODES.map((mode) => (
           <button
             key={mode}
             type="button"
-            aria-pressed={colorMode === mode}
-            onClick={() => setColorMode(mode)}
+            aria-pressed={themeMode === mode}
+            onClick={() => setThemeMode(mode)}
             className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              colorMode === mode
+              themeMode === mode
                 ? 'bg-primary text-primary-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            {mode === 'light' ? 'روشن' : 'تاریک'}
+            {themeModeLabel(mode)}
           </button>
         ))}
       </div>
@@ -40,7 +45,7 @@ function ColorModeSelector() {
 }
 
 function ActiveThemeSummary() {
-  const { theme, themeId, colorMode, resolvedTheme } = useTheme();
+  const { theme, themeId, themeMode, colorMode, resolvedTheme } = useTheme();
 
   return (
     <section
@@ -69,7 +74,8 @@ function ActiveThemeSummary() {
         <div className="rounded-lg bg-muted/60 px-3 py-2">
           <dt className="text-muted-foreground">حالت رنگ</dt>
           <dd className="mt-0.5 font-medium text-foreground">
-            {colorMode === 'dark' ? 'تاریک' : 'روشن'}
+            {themeModeLabel(themeMode)}
+            {themeMode === 'system' ? ` (${colorMode === 'dark' ? 'تاریک' : 'روشن'})` : ''}
           </dd>
         </div>
         <div className="rounded-lg bg-muted/60 px-3 py-2">

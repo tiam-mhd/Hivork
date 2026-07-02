@@ -52,4 +52,9 @@ export type DataTableProps<T extends { id: string }> = {
   isRowSelectable?: (row: T) => boolean;
   rowNotSelectableReason?: string;
   bulkActions?: BulkAction<T>[];
+  /** Enables `/` and export shortcuts for list pages. */
+  enableListShortcuts?: boolean;
+  searchInputRef?: React.RefObject<HTMLInputElement | null>;
+  onListExport?: () => void;
+  canListExport?: boolean;
 };

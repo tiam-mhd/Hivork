@@ -4,9 +4,9 @@ import type { ColumnPersonalization } from '@hivork/contracts/ui';
 import { Button } from '@hivork/ui';
 import { useCallback, useState } from 'react';
 
-import type { DataTableColumnDef } from './types';
 import { ColumnSettingsDrawer } from './column-settings-drawer';
 import { ColumnSettingsDropdown } from './column-settings-dropdown';
+import type { DataTableColumnDef } from './types';
 
 type ColumnSettingsTriggerProps<T> = {
   columns: DataTableColumnDef<T>[];

@@ -3,10 +3,10 @@
 import type { DataTableSortDir, RowSelectionState } from '@hivork/contracts/ui';
 import { cn } from '@hivork/ui';
 
-import { cycleDataTableSort, resolveAriaSort } from '@/lib/data-table/sort-utils';
 import { DataTableSelectionHeaderCell } from './data-table-selection-column';
-
 import type { DataTableColumnDef } from './types';
+
+import { cycleDataTableSort, resolveAriaSort } from '@/lib/data-table/sort-utils';
 
 type DataTableHeaderProps<T> = {
   columns: DataTableColumnDef<T>[];
@@ -24,14 +24,14 @@ type DataTableHeaderProps<T> = {
 function SortIndicator({ active, dir }: { active: boolean; dir?: DataTableSortDir }) {
   if (!active) {
     return (
-      <span className="ms-1 inline-block text-muted-foreground/50" aria-hidden>
+      <span className="ms-1 inline-block text-muted-foreground/50 rtl:-scale-x-100" aria-hidden>
         ↕
       </span>
     );
   }
 
   return (
-    <span className="ms-1 inline-block text-foreground" aria-hidden>
+    <span className="ms-1 inline-block text-foreground rtl:-scale-x-100" aria-hidden>
       {dir === 'asc' ? '↑' : '↓'}
     </span>
   );

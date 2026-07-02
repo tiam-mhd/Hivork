@@ -3,14 +3,15 @@
 import type { FilterCondition, FilterFieldDef } from '@hivork/contracts/ui';
 import { Button } from '@hivork/ui';
 
+import { FilterFieldSelect, FilterOperatorSelect } from './filter-field-select';
+import { FilterValueInput } from './filter-value-input';
+
 import {
   findFieldDef,
   getInitialOperatorForField,
 } from '@/lib/filter/filter-ast.utils';
 import { getDefaultOperatorForField } from '@/lib/filter/filter-operators';
 
-import { FilterFieldSelect, FilterOperatorSelect } from './filter-field-select';
-import { FilterValueInput } from './filter-value-input';
 
 type FilterConditionRowProps = {
   fields: FilterFieldDef[];

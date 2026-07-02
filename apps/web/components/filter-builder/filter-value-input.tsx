@@ -3,7 +3,9 @@
 import type { FilterFieldDef, FilterOperator } from '@hivork/contracts/ui';
 import { operatorRequiresRangeValue, operatorRequiresValue } from '@hivork/contracts/ui';
 import { Checkbox, Input, Label } from '@hivork/ui';
+import { useTranslations } from 'next-intl';
 
+import { DatePicker } from '@/components/date-picker';
 import { findFieldDef } from '@/lib/filter/filter-ast.utils';
 
 type FilterValueInputProps = {
@@ -21,23 +23,42 @@ export function FilterValueInput({
   onChange,
   disabled = false,
 }: FilterValueInputProps) {
+  const t = useTranslations('filter');
+  const tCommon = useTranslations('common');
+
   if (!field || !operatorRequiresValue(operator)) {
     return (
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <Label className="text-xs text-muted-foreground">مقدار</Label>
-        <Input disabled value="" placeholder="—" aria-label="مقدار فیلتر" />
+        <Label className="text-xs text-muted-foreground">{t('valueLabel')}</Label>
+        <Input disabled value="" placeholder="—" aria-label={t('valueLabel')} />
       </div>
     );
   }
 
   if (operatorRequiresRangeValue(operator)) {
     const range = (value as { from?: string; to?: string } | undefined) ?? {};
+
+    if (field.type === 'date') {
+      return (
+        <div className="flex min-w-0 flex-[2] flex-col gap-1">
+          <DatePicker
+            mode="range"
+            rangeValue={range}
+            onRangeChange={(next) => onChange(next)}
+            disabled={disabled}
+            compact
+            showHelp={false}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-w-0 flex-[2] flex-col gap-2 sm:flex-row">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <Label className="text-xs text-muted-foreground">از</Label>
+          <Label className="text-xs text-muted-foreground">{tCommon('from')}</Label>
           <Input
-            type={field.type === 'date' ? 'date' : field.type === 'money_rial' ? 'text' : 'number'}
+            type={field.type === 'money_rial' ? 'text' : 'number'}
             inputMode={field.type === 'money_rial' ? 'numeric' : undefined}
             dir={field.type === 'money_rial' ? 'ltr' : undefined}
             value={range.from ?? ''}
@@ -45,19 +66,19 @@ export function FilterValueInput({
             onChange={(event) =>
               onChange({ ...range, from: event.target.value || undefined })
             }
-            aria-label="مقدار از"
+            aria-label={t('fromValue')}
           />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <Label className="text-xs text-muted-foreground">تا</Label>
+          <Label className="text-xs text-muted-foreground">{tCommon('to')}</Label>
           <Input
-            type={field.type === 'date' ? 'date' : field.type === 'money_rial' ? 'text' : 'number'}
+            type={field.type === 'money_rial' ? 'text' : 'number'}
             inputMode={field.type === 'money_rial' ? 'numeric' : undefined}
             dir={field.type === 'money_rial' ? 'ltr' : undefined}
             value={range.to ?? ''}
             disabled={disabled}
             onChange={(event) => onChange({ ...range, to: event.target.value || undefined })}
-            aria-label="مقدار تا"
+            aria-label={t('toValue')}
           />
         </div>
       </div>
@@ -71,7 +92,7 @@ export function FilterValueInput({
     if (multi) {
       return (
         <div className="flex min-w-0 flex-[2] flex-col gap-2">
-          <Label className="text-xs text-muted-foreground">مقدار</Label>
+          <Label className="text-xs text-muted-foreground">{t('valueLabel')}</Label>
           <div className="flex flex-wrap gap-3">
             {field.enumOptions.map((option) => (
               <label key={option.value} className="flex items-center gap-2 text-sm">
@@ -95,15 +116,15 @@ export function FilterValueInput({
 
     return (
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <Label className="text-xs text-muted-foreground">مقدار</Label>
+        <Label className="text-xs text-muted-foreground">{t('valueLabel')}</Label>
         <select
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
           value={typeof value === 'string' ? value : ''}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
-          aria-label="مقدار فیلتر"
+          aria-label={t('valueLabel')}
         >
-          <option value="">انتخاب</option>
+          <option value="">{tCommon('select')}</option>
           {field.enumOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -117,7 +138,7 @@ export function FilterValueInput({
   if (field.type === 'boolean') {
     return (
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <Label className="text-xs text-muted-foreground">مقدار</Label>
+        <Label className="text-xs text-muted-foreground">{t('valueLabel')}</Label>
         <select
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
           value={value === true ? 'true' : value === false ? 'false' : ''}
@@ -133,31 +154,43 @@ export function FilterValueInput({
             }
             onChange(undefined);
           }}
-          aria-label="مقدار بولین"
+          aria-label={t('valueLabel')}
         >
-          <option value="">انتخاب</option>
-          <option value="true">بله</option>
-          <option value="false">خیر</option>
+          <option value="">{tCommon('select')}</option>
+          <option value="true">{tCommon('yes')}</option>
+          <option value="false">{tCommon('no')}</option>
         </select>
       </div>
     );
   }
 
-  const inputType =
-    field.type === 'date' ? 'date' : field.type === 'number' || field.type === 'money_rial' ? 'text' : 'text';
+  if (field.type === 'date') {
+    return (
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <DatePicker
+          mode="single"
+          value={typeof value === 'string' ? value : undefined}
+          onChange={(next) => onChange(next)}
+          disabled={disabled}
+          compact
+          showHelp={false}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-1">
-      <Label className="text-xs text-muted-foreground">مقدار</Label>
+      <Label className="text-xs text-muted-foreground">{t('valueLabel')}</Label>
       <Input
-        type={inputType}
+        type={field.type === 'number' || field.type === 'money_rial' ? 'text' : 'text'}
         inputMode={field.type === 'money_rial' ? 'numeric' : undefined}
         dir={field.type === 'money_rial' || field.type === 'uuid' ? 'ltr' : undefined}
         value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''}
         placeholder={field.placeholder}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        aria-label="مقدار فیلتر"
+        aria-label={t('valueLabel')}
       />
     </div>
   );

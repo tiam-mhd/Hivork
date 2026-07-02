@@ -1,8 +1,8 @@
 'use client';
 
 import type { BulkActionVariant } from '@hivork/contracts/ui';
-import { Button, cn } from '@hivork/ui';
 import { formatPersianDigits } from '@hivork/i18n';
+import { Button, cn } from '@hivork/ui';
 import type { ComponentType } from 'react';
 
 import { usePermissions } from '@/hooks/use-permission';

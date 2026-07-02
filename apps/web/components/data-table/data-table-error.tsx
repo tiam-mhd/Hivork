@@ -5,11 +5,13 @@ import { cn } from '@hivork/ui';
 type DataTableErrorProps = {
   message?: string;
   onRetry?: () => void;
+  retryLabel?: string;
 };
 
 export function DataTableError({
   message = 'خطا در بارگذاری',
   onRetry,
+  retryLabel = 'تلاش مجدد',
 }: DataTableErrorProps) {
   return (
     <div
@@ -26,7 +28,7 @@ export function DataTableError({
             'transition-colors hover:bg-muted',
           )}
         >
-          تلاش مجدد
+          {retryLabel}
         </button>
       ) : null}
     </div>

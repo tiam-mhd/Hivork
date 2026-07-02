@@ -2,6 +2,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('next-intl', () => ({
+  useTranslations: (namespace: string) => (key: string) => `${namespace}.${key}`,
+}));
+
 import { DataTable } from './data-table';
 import { DataTableEmpty } from './data-table-empty';
 import { DataTableError } from './data-table-error';
@@ -108,7 +112,7 @@ describe('DataTable', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'تلاش مجدد' }));
+    fireEvent.click(screen.getByRole('button', { name: 'dataTable.retry' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });

@@ -170,7 +170,7 @@ export function SaleListFilters({
           <JalaliDatePicker
             id="sale-from-date"
             label="از تاریخ قرارداد"
-            value={value.from}
+            value={value.from ?? ''}
             onChange={(from) => onChange({ ...value, from })}
             disabled={disabled}
             compact
@@ -180,7 +180,7 @@ export function SaleListFilters({
           <JalaliDatePicker
             id="sale-to-date"
             label="تا تاریخ قرارداد"
-            value={value.to}
+            value={value.to ?? ''}
             onChange={(to) => onChange({ ...value, to })}
             disabled={disabled}
             compact

@@ -1,7 +1,6 @@
 'use client';
 
-import type { ThemeColorMode } from '@hivork/contracts/theme';
-import { ThemeProvider } from '@hivork/theme/react';
+import type { ThemeModePreference } from '@hivork/contracts/theme';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@hivork/ui';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
@@ -11,6 +10,8 @@ import { AdminSidebar } from '@/components/layout/admin-sidebar';
 import { BreadcrumbOverrideProvider } from '@/components/layout/breadcrumb-override';
 import { MobileNavDrawer } from '@/components/layout/mobile-nav-drawer';
 import { PageBreadcrumb } from '@/components/layout/page-breadcrumb';
+import { useRealtime } from '@/components/providers/realtime-provider';
+import { ThemeProvider } from '@/components/providers/theme-provider';
 import { useActiveBranch } from '@/hooks/use-active-branch';
 import { useStaffAuth } from '@/lib/auth/use-staff-auth';
 import { useAdminSession } from '@/lib/layout/admin-session-context';
@@ -47,10 +48,10 @@ function AdminShellSkeleton() {
 type AdminShellProps = {
   children: ReactNode;
   initialThemeId: string;
-  initialColorMode: ThemeColorMode;
+  initialThemeMode: ThemeModePreference;
 };
 
-export function AdminShell({ children, initialThemeId, initialColorMode }: AdminShellProps) {
+export function AdminShell({ children, initialThemeId, initialThemeMode }: AdminShellProps) {
   const router = useRouter();
   const { isLoading, error, staff, tenant, refetch } = useAdminSession();
   const { logout } = useStaffAuth();
@@ -63,6 +64,7 @@ export function AdminShell({ children, initialThemeId, initialColorMode }: Admin
     clearToast,
     switchBranch,
   } = useActiveBranch();
+  const { highPriorityToast, clearHighPriorityToast } = useRealtime();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const handleLogout = useCallback(async () => {
@@ -83,7 +85,7 @@ export function AdminShell({ children, initialThemeId, initialColorMode }: Admin
 
   if (isLoading) {
     return (
-      <ThemeProvider initialThemeId={initialThemeId} initialColorMode={initialColorMode}>
+      <ThemeProvider themeId={initialThemeId} defaultTheme={initialThemeMode}>
         <AdminShellSkeleton />
       </ThemeProvider>
     );
@@ -91,7 +93,7 @@ export function AdminShell({ children, initialThemeId, initialColorMode }: Admin
 
   if (error || !staff || !tenant) {
     return (
-      <ThemeProvider initialThemeId={initialThemeId} initialColorMode={initialColorMode}>
+      <ThemeProvider themeId={initialThemeId} defaultTheme={initialThemeMode}>
         <main className="layout-shell flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
             <CardHeader>
@@ -115,7 +117,11 @@ export function AdminShell({ children, initialThemeId, initialColorMode }: Admin
   }
 
   return (
-    <ThemeProvider initialThemeId={initialThemeId} initialColorMode={initialColorMode}>
+    <ThemeProvider
+      themeId={initialThemeId}
+      defaultTheme={initialThemeMode}
+      tenantThemeId={tenant.settings?.themeId}
+    >
       <div className="layout-shell flex">
         <aside className="layout-sidebar-panel hidden shrink-0 lg:block">
           <div className="sticky top-0 flex h-screen flex-col">
@@ -148,6 +154,18 @@ export function AdminShell({ children, initialThemeId, initialColorMode }: Admin
             >
               <span>{toast}</span>
               <button type="button" className="underline" onClick={clearToast}>
+                بستن
+              </button>
+            </div>
+          ) : null}
+
+          {highPriorityToast ? (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-2 border-b border-banner-trial-border bg-banner-trial px-4 py-2 text-sm text-banner-trial-foreground"
+            >
+              <span>{highPriorityToast}</span>
+              <button type="button" className="underline" onClick={clearHighPriorityToast}>
                 بستن
               </button>
             </div>

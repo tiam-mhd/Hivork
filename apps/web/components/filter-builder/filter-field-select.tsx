@@ -3,11 +3,11 @@
 import type { FilterFieldDef, FilterOperator } from '@hivork/contracts/ui';
 import { Label, Select } from '@hivork/ui';
 
+import { findFieldDef } from '@/lib/filter/filter-ast.utils';
 import {
   FILTER_OPERATOR_LABELS_FA,
   getOperatorsForField,
 } from '@/lib/filter/filter-operators';
-import { findFieldDef } from '@/lib/filter/filter-ast.utils';
 
 type FilterFieldSelectProps = {
   fields: FilterFieldDef[];

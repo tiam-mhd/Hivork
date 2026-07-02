@@ -25,6 +25,10 @@ const TEMPLATE_HREF = '/templates/customer-import-template.xlsx';
 
 type ImportPageState = 'idle' | 'uploading' | 'result' | 'error';
 
+function resolveImportFailedCount(result: ImportCustomersResultDto): number {
+  return result.failedCount ?? result.errorCount ?? result.errors.length;
+}
+
 export default function CustomerImportPage() {
   return (
     <RequirePermission permission="installments.customer.import">
@@ -79,7 +83,8 @@ function CustomerImportContent() {
         setResult(data);
         setPageState('result');
 
-        if (data.errorCount === 0) {
+        const failedCount = resolveImportFailedCount(data);
+        if (failedCount === 0) {
           setSuccessBanner('همه ردیف‌ها با موفقیت وارد شدند.');
         } else if (data.successCount === 0) {
           setSuccessBanner('هیچ ردیفی وارد نشد. خطاها را بررسی کنید.');
@@ -191,7 +196,7 @@ function CustomerImportContent() {
           {successBanner ? (
             <p
               className={`rounded-md border px-4 py-3 text-sm ${
-                result.errorCount === 0
+                resolveImportFailedCount(result) === 0
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                   : result.successCount === 0
                     ? 'border-amber-200 bg-amber-50 text-amber-900'
@@ -206,7 +211,7 @@ function CustomerImportContent() {
           <ImportResultSummary
             totalRows={result.totalRows}
             successCount={result.successCount}
-            errorCount={result.errorCount}
+            errorCount={resolveImportFailedCount(result)}
           />
 
           <ImportResultTable errors={result.errors} />

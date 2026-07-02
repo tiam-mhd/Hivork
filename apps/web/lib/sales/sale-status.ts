@@ -1,6 +1,6 @@
-import type { SaleSummaryDto } from '@hivork/contracts/installments';
+import type { SaleStatusDto } from '@hivork/contracts/installments';
 
-export type SaleStatus = SaleSummaryDto['status'];
+export type SaleStatus = SaleStatusDto;
 
 type SaleStatusPresentation = {
   label: string;
@@ -24,6 +24,21 @@ const SALE_STATUS_PRESENTATION: Record<SaleStatus, SaleStatusPresentation> = {
     label: 'لغو‌شده',
     className: 'bg-muted text-muted-foreground ring-border',
     emoji: '⚫',
+  },
+  terminated: {
+    label: 'مختومه',
+    className: 'bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:text-amber-300',
+    emoji: '⛔',
+  },
+  closed: {
+    label: 'بسته‌شده',
+    className: 'bg-indigo-500/10 text-indigo-700 ring-indigo-500/25 dark:text-indigo-300',
+    emoji: '📦',
+  },
+  archived: {
+    label: 'بایگانی',
+    className: 'bg-stone-500/10 text-stone-700 ring-stone-500/25 dark:text-stone-300',
+    emoji: '🗄️',
   },
 };
 
