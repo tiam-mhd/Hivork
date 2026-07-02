@@ -1,32 +1,28 @@
-import { normalizePhone } from '@hivork/contracts';
 import type { ExportLocaleDto, TenantBrandingDto } from '@hivork/contracts/core';
 import type { FilterAst } from '@hivork/contracts/ui';
 
 import { EXPORT_BATCH_SIZE } from '../core/export/export.service.js';
 import type { ExportColumnDef } from '../core/export/export.service.js';
 import { formatPrintDateCell } from '../core/export/render-print-layout-html.js';
-import { buildListWhere } from '../core/list/build-list-where.js';
 import { ApplicationError } from '../errors/application.error.js';
 import type { ITenantRepository } from '../ports/tenant.repository.port.js';
 import type {
   ITenantCustomerRepository,
   ListActiveTenantCustomersOptions,
   TenantCustomerListItem,
+  TenantCustomerListLinkStatusFilter,
   TenantCustomerListSort,
 } from '../ports/tenant-customer.repository.port.js';
 import {
   resolveEffectiveBranchIds,
   type DataScopeStaffContext,
 } from '../rbac/build-data-scope-filter.js';
+import { buildCustomerListWhere, isCustomerSearchActionable } from './customer-list-query.config.js';
+import { resolveCustomerExportColumns } from './customer-export.columns.js';
 import {
   decodeTenantCustomerCursor,
   encodeTenantCustomerCursor,
 } from './tenant-customer-cursor.js';
-import {
-  CUSTOMER_FILTER_FIELD_MAP,
-  CUSTOMER_SEARCH_FIELDS,
-} from './customer-list-query.config.js';
-import { resolveCustomerExportColumns } from './customer-export.columns.js';
 
 export const DEFAULT_PDF_MAX_ROWS = 500;
 
@@ -39,6 +35,10 @@ const ALLOWED_SORTS: TenantCustomerListSort[] = [
   'lastPurchaseAt:asc',
   'overdueCount:desc',
   'overdueCount:asc',
+  'creditScore:desc',
+  'creditScore:asc',
+  'totalPurchaseRial:desc',
+  'totalPurchaseRial:asc',
 ];
 
 const DATE_COLUMN_IDS = new Set(['lastPurchaseAt', 'createdAt']);
@@ -52,7 +52,17 @@ export type CustomerListExportBaseInput = {
   sort?: TenantCustomerListSort;
   tags?: string[];
   status?: 'active' | 'suspended';
+  branchId?: string;
   defaultBranchId?: string;
+  categoryId?: string;
+  isBlacklisted?: boolean;
+  assignedStaffId?: string;
+  linkStatus?: TenantCustomerListLinkStatusFilter;
+  createdAtFrom?: Date;
+  createdAtTo?: Date;
+  lastPurchaseAtFrom?: Date;
+  lastPurchaseAtTo?: Date;
+  includeArchived?: boolean;
   columns?: string[];
   ids?: string[];
   locale?: ExportLocaleDto;
@@ -79,8 +89,9 @@ export async function prepareCustomerListExport(
     throw new ApplicationError('VALIDATION_ERROR', 'Invalid sort field.', 400);
   }
 
-  if (input.defaultBranchId) {
-    assertBranchDataScope(input.staffContext, input.defaultBranchId);
+  const branchId = input.branchId ?? input.defaultBranchId;
+  if (branchId) {
+    assertBranchDataScope(input.staffContext, branchId);
   }
 
   if (
@@ -99,13 +110,34 @@ export async function prepareCustomerListExport(
     );
   }
 
-  const listWhere = buildListWhere({
+  if (input.search?.trim() && !isCustomerSearchActionable(input.search)) {
+    const tenantRecord = await tenants.findById(input.tenantId);
+    const tenantDetail = await tenants.findDetailById(input.tenantId);
+    return {
+      columns,
+      listOptionsBase: {
+        sort,
+        listWhere: { tenantId: input.tenantId, deletedAt: null },
+        status: input.status ?? ('active' as const),
+        scope: buildScope(input.staffContext, input.actorId),
+        includeCount: true,
+      },
+      total: 0,
+      tenantSlug: tenantRecord?.slug ?? 'tenant',
+      tenantBranding: {
+        name: tenantDetail?.name ?? tenantRecord?.name ?? 'Tenant',
+        legalName: tenantDetail?.legalName ?? null,
+        taxId: tenantDetail?.taxId ?? null,
+        logoUrl: tenantDetail?.logoUrl ?? null,
+      },
+      locale: input.locale ?? 'fa-IR',
+    };
+  }
+
+  const listWhere = buildCustomerListWhere({
     tenantId: input.tenantId,
     search: input.search,
-    searchFields: CUSTOMER_SEARCH_FIELDS,
-    phoneNormalize: normalizePhone,
     filter: input.filter,
-    fieldMap: CUSTOMER_FILTER_FIELD_MAP,
   });
 
   const scope = buildScope(input.staffContext, input.actorId);
@@ -114,9 +146,19 @@ export async function prepareCustomerListExport(
     listWhere,
     tags: input.tags?.length ? input.tags : undefined,
     status: input.status ?? ('active' as const),
-    defaultBranchId: input.defaultBranchId,
+    branchId,
+    categoryId: input.categoryId,
+    isBlacklisted: input.isBlacklisted,
+    assignedStaffId: input.assignedStaffId,
+    linkStatus: input.linkStatus,
+    createdAtFrom: input.createdAtFrom,
+    createdAtTo: input.createdAtTo,
+    lastPurchaseAtFrom: input.lastPurchaseAtFrom,
+    lastPurchaseAtTo: input.lastPurchaseAtTo,
+    includeArchived: input.includeArchived,
     scope,
     ids: input.ids?.length ? input.ids : undefined,
+    includeCount: true,
   };
 
   const probe = await repository.listActive(input.tenantId, {
@@ -124,15 +166,15 @@ export async function prepareCustomerListExport(
     limit: 1,
   });
 
-  if (probe.total > input.maxRows) {
+  if ((probe.total ?? 0) > input.maxRows) {
     const code = input.limitErrorCode ?? 'EXPORT_LIMIT_EXCEEDED';
     const message =
       code === 'PDF_ROW_LIMIT'
         ? `PDF export supports up to ${input.maxRows} rows. Use Excel export or narrow filters.`
         : `Export exceeds maximum of ${input.maxRows} rows. Narrow your filters.`;
 
-    throw new ApplicationError(code, message, 403, {
-      total: probe.total,
+    throw new ApplicationError(code, message, 422, {
+      total: probe.total ?? 0,
       maxRows: input.maxRows,
     });
   }
@@ -151,7 +193,7 @@ export async function prepareCustomerListExport(
   return {
     columns,
     listOptionsBase,
-    total: probe.total,
+    total: probe.total ?? 0,
     tenantSlug,
     tenantBranding,
     locale: input.locale ?? 'fa-IR',
@@ -234,6 +276,11 @@ export async function fetchCustomerExportBatch(
                 ? new Date(cursorPayload.lastPurchaseAt)
                 : null,
           overdueCount: cursorPayload.overdueCount,
+          creditScore: cursorPayload.creditScore,
+          totalPurchaseRial:
+            cursorPayload.totalPurchaseRial !== undefined
+              ? BigInt(cursorPayload.totalPurchaseRial)
+              : undefined,
         }
       : undefined,
   });
@@ -247,6 +294,8 @@ export async function fetchCustomerExportBatch(
           globalCustomer: lastItem.globalCustomer,
           lastPurchaseAt: lastItem.lastPurchaseAt,
           overdueCount: lastItem.overdueCount,
+          creditScore: lastItem.creditScore,
+          totalPurchaseRial: lastItem.totalPurchaseRial,
         })
       : null;
 

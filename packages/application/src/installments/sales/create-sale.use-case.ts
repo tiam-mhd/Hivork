@@ -239,9 +239,17 @@ export class CreateSaleUseCase implements UseCase<CreateSaleInput, SaleDetail> {
   }
 
   private async assertCustomerExists(tenantId: string, tenantCustomerId: string): Promise<void> {
-    const customer = await this.tenantCustomers.findActiveById(tenantCustomerId, tenantId);
+    const customer = await this.tenantCustomers.findDetailById(tenantCustomerId, tenantId);
     if (!customer) {
       throw new ApplicationError('CUSTOMER_NOT_FOUND', 'Customer was not found for this tenant.', 404);
+    }
+
+    if (customer.isBlacklisted) {
+      throw new ApplicationError(
+        'CUSTOMER_BLACKLISTED',
+        'Blacklisted customers cannot have new sales created.',
+        403,
+      );
     }
   }
 

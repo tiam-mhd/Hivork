@@ -25,6 +25,11 @@ describe('ListTenantCustomersUseCase', () => {
     lastPurchaseAt: new Date('2026-01-02T00:00:00.000Z'),
     preferredContactChannel: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    categoryId: null,
+    categoryName: null,
+    primaryAddressCity: null,
+    linkStatus: 'active' as const,
+    isBlacklisted: false,
   };
 
   beforeEach(() => {
@@ -32,7 +37,7 @@ describe('ListTenantCustomersUseCase', () => {
   });
 
   it('lists active customers with default limit and sort', async () => {
-    repository.listActive.mockResolvedValue({ items: [], hasMore: false, total: 0 });
+    repository.listActive.mockResolvedValue({ items: [], hasMore: false });
 
     const result = await useCase.execute({
       tenantId: 'tenant-1',
@@ -42,25 +47,24 @@ describe('ListTenantCustomersUseCase', () => {
 
     expect(result).toEqual({
       data: [],
-      meta: { total: 0, hasNext: false, nextCursor: null },
+      meta: { hasNext: false, nextCursor: null },
     });
-    expect(repository.listActive).toHaveBeenCalledWith('tenant-1', {
-      limit: 20,
-      sort: 'createdAt:desc',
-      search: undefined,
-      tags: undefined,
-      status: 'active',
-      defaultBranchId: undefined,
-      cursor: undefined,
-      scope: { dataScope: 'all', actorId: 'staff-1' },
-    });
+    expect(repository.listActive).toHaveBeenCalledWith(
+      'tenant-1',
+      expect.objectContaining({
+        limit: 20,
+        sort: 'createdAt:desc',
+        status: 'active',
+        scope: { dataScope: 'all', actorId: 'staff-1' },
+        listWhere: { tenantId: 'tenant-1', deletedAt: null },
+      }),
+    );
   });
 
   it('returns hasNext and nextCursor when page is full', async () => {
     repository.listActive.mockResolvedValue({
       items: [listItem],
       hasMore: true,
-      total: 10,
     });
 
     const result = await useCase.execute({
@@ -76,8 +80,8 @@ describe('ListTenantCustomersUseCase', () => {
     );
   });
 
-  it('passes search and tags filters to repository', async () => {
-    repository.listActive.mockResolvedValue({ items: [], hasMore: false, total: 0 });
+  it('passes enterprise filters to repository', async () => {
+    repository.listActive.mockResolvedValue({ items: [], hasMore: false });
 
     await useCase.execute({
       tenantId: 'tenant-1',
@@ -86,16 +90,50 @@ describe('ListTenantCustomersUseCase', () => {
       search: '9123',
       tags: ['vip', 'gold'],
       sort: 'name:asc',
+      categoryId: '00000000-0000-4000-8000-000000000001',
+      isBlacklisted: true,
+      assignedStaffId: '00000000-0000-4000-8000-000000000002',
+      branchId: '00000000-0000-4000-8000-000000000003',
+      includeCount: true,
     });
 
     expect(repository.listActive).toHaveBeenCalledWith(
       'tenant-1',
       expect.objectContaining({
-        search: '9123',
         tags: ['vip', 'gold'],
         sort: 'name:asc',
+        categoryId: '00000000-0000-4000-8000-000000000001',
+        isBlacklisted: true,
+        assignedStaffId: '00000000-0000-4000-8000-000000000002',
+        branchId: '00000000-0000-4000-8000-000000000003',
+        includeCount: true,
       }),
     );
+  });
+
+  it('returns empty list for single-char search', async () => {
+    const result = await useCase.execute({
+      tenantId: 'tenant-1',
+      actorId: 'staff-1',
+      staffContext,
+      search: 'a',
+    });
+
+    expect(result.data).toEqual([]);
+    expect(repository.listActive).not.toHaveBeenCalled();
+  });
+
+  it('allows phone-prefix search with fewer than 2 name chars', async () => {
+    repository.listActive.mockResolvedValue({ items: [], hasMore: false });
+
+    await useCase.execute({
+      tenantId: 'tenant-1',
+      actorId: 'staff-1',
+      staffContext,
+      search: '0912',
+    });
+
+    expect(repository.listActive).toHaveBeenCalled();
   });
 
   it('rejects invalid limit', async () => {
@@ -109,7 +147,7 @@ describe('ListTenantCustomersUseCase', () => {
       useCase.execute({
         tenantId: 'tenant-1',
         actorId: 'staff-1',
-        defaultBranchId: 'branch-2',
+        branchId: 'branch-2',
         staffContext: {
           staffId: 'staff-1',
           dataScope: 'branch',
@@ -145,5 +183,18 @@ describe('ListTenantCustomersUseCase', () => {
         cursor: 'bad-cursor',
       }),
     ).rejects.toMatchObject({ code: 'INVALID_CURSOR' });
+  });
+
+  it('includes total when repository returns it', async () => {
+    repository.listActive.mockResolvedValue({ items: [], hasMore: false, total: 42 });
+
+    const result = await useCase.execute({
+      tenantId: 'tenant-1',
+      actorId: 'staff-1',
+      staffContext,
+      includeCount: true,
+    });
+
+    expect(result.meta.total).toBe(42);
   });
 });

@@ -3,16 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApplicationError } from '../errors/application.error.js';
 import { ImportCustomersExcelUseCase } from './import-customers-excel.use-case.js';
+import { CUSTOMER_IMPORT_TEMPLATE_HEADERS } from './excel/customer-import.parser.js';
 
 async function buildCustomerImportWorkbook(
-  rows: Array<{ phone?: string; name?: string; local_code?: string; notes?: string }>,
+  rows: Array<Record<string, string | undefined>>,
+  headers: string[] = [...CUSTOMER_IMPORT_TEMPLATE_HEADERS],
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Customers');
-  sheet.addRow(['phone', 'name', 'local_code', 'notes']);
+  sheet.addRow(headers);
 
   for (const row of rows) {
-    sheet.addRow([row.phone ?? '', row.name ?? '', row.local_code ?? '', row.notes ?? '']);
+    sheet.addRow(headers.map((header) => row[header] ?? ''));
   }
 
   const arrayBuffer = await workbook.xlsx.writeBuffer();
@@ -21,11 +23,17 @@ async function buildCustomerImportWorkbook(
 
 describe('ImportCustomersExcelUseCase', () => {
   const createTenantCustomer = { execute: vi.fn() };
+  const tenantCustomers = { countActive: vi.fn() };
+  const tenantPlans = { getMaxCustomers: vi.fn() };
+  const categories = { resolveBySlugOrName: vi.fn() };
   const idempotency = { find: vi.fn(), store: vi.fn() };
   const audit = { log: vi.fn() };
 
   const useCase = new ImportCustomersExcelUseCase(
     createTenantCustomer as never,
+    tenantCustomers as never,
+    tenantPlans as never,
+    categories as never,
     idempotency as never,
     audit,
   );
@@ -47,6 +55,9 @@ describe('ImportCustomersExcelUseCase', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     idempotency.find.mockResolvedValue(null);
+    tenantPlans.getMaxCustomers.mockResolvedValue(10_000);
+    tenantCustomers.countActive.mockResolvedValue(0);
+    categories.resolveBySlugOrName.mockResolvedValue({ status: 'not_found' });
     createTenantCustomer.execute.mockResolvedValue({
       customer: { id: 'tc-1' },
       globalCustomer: { id: 'global-1' },
@@ -65,6 +76,7 @@ describe('ImportCustomersExcelUseCase', () => {
     expect(result).toEqual({
       totalRows: 2,
       successCount: 2,
+      failedCount: 0,
       errorCount: 0,
       errors: [],
     });
@@ -75,7 +87,7 @@ describe('ImportCustomersExcelUseCase', () => {
         newValue: expect.objectContaining({
           totalRows: 2,
           successCount: 2,
-          errorCount: 0,
+          failedCount: 0,
           idempotencyKey: baseInput.idempotencyKey,
         }),
       }),
@@ -83,13 +95,56 @@ describe('ImportCustomersExcelUseCase', () => {
     expect(idempotency.store).toHaveBeenCalledOnce();
   });
 
+  it('passes enterprise fields to create use case', async () => {
+    categories.resolveBySlugOrName.mockResolvedValue({
+      status: 'found',
+      categoryId: 'cat-1',
+    });
+
+    const fileBuffer = await buildCustomerImportWorkbook([
+      {
+        phone: '09121111111',
+        name: 'Enterprise Customer',
+        local_code: 'C-1',
+        email: 'a@example.com',
+        national_id: '1234567890',
+        category: 'vip',
+        tags: 'gold,vip',
+        address_line: 'خیابان ۱',
+        city: 'تهران',
+        phone2: '09129876543',
+        emergency_name: 'Contact',
+        emergency_phone: '09127777777',
+        notes: 'imported',
+      },
+    ]);
+
+    await useCase.execute({ ...baseInput, fileBuffer });
+
+    expect(createTenantCustomer.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phone: '09121111111',
+        name: 'Enterprise Customer',
+        localCode: 'C-1',
+        email: 'a@example.com',
+        nationalId: '1234567890',
+        categoryId: 'cat-1',
+        tags: ['gold', 'vip'],
+        notes: 'imported',
+        addresses: [{ line1: 'خیابان ۱', city: 'تهران', isPrimary: true }],
+        contactPhones: [{ phone: '09129876543', isPrimarySecondary: true }],
+        emergencyContacts: [
+          { name: 'Contact', phone: '09127777777', isPrimary: true },
+        ],
+      }),
+    );
+  });
+
   it('collects row-level errors and continues processing', async () => {
     createTenantCustomer.execute
-      .mockResolvedValueOnce({ customer: { id: 'tc-1' } })
-      .mockRejectedValueOnce(
-        new ApplicationError('CUSTOMER_EXISTS', 'exists', 409),
-      )
-      .mockResolvedValueOnce({ customer: { id: 'tc-3' } });
+      .mockResolvedValueOnce({ customer: { id: 'tc-1' }, restored: false })
+      .mockRejectedValueOnce(new ApplicationError('CUSTOMER_EXISTS', 'exists', 409))
+      .mockResolvedValueOnce({ customer: { id: 'tc-3' }, restored: false });
 
     const fileBuffer = await buildCustomerImportWorkbook([
       { phone: '09121111111', name: 'A' },
@@ -100,7 +155,7 @@ describe('ImportCustomersExcelUseCase', () => {
     const result = await useCase.execute({ ...baseInput, fileBuffer });
 
     expect(result.successCount).toBe(2);
-    expect(result.errorCount).toBe(1);
+    expect(result.failedCount).toBe(1);
     expect(result.errors[0]).toMatchObject({
       row: 3,
       phone: '09122222222',
@@ -126,10 +181,27 @@ describe('ImportCustomersExcelUseCase', () => {
     ]);
   });
 
+  it('fails early when batch exceeds remaining plan capacity', async () => {
+    tenantPlans.getMaxCustomers.mockResolvedValue(100);
+    tenantCustomers.countActive.mockResolvedValue(99);
+
+    const fileBuffer = await buildCustomerImportWorkbook([
+      { phone: '09121111111', name: 'A' },
+      { phone: '09122222222', name: 'B' },
+    ]);
+
+    await expect(useCase.execute({ ...baseInput, fileBuffer })).rejects.toMatchObject({
+      code: 'PLAN_LIMIT',
+      httpStatus: 403,
+    });
+    expect(createTenantCustomer.execute).not.toHaveBeenCalled();
+  });
+
   it('returns cached result for duplicate idempotency key', async () => {
     const cached = {
       totalRows: 1,
       successCount: 1,
+      failedCount: 0,
       errorCount: 0,
       errors: [],
     };
@@ -163,25 +235,23 @@ describe('ImportCustomersExcelUseCase', () => {
     expect(idempotency.store).not.toHaveBeenCalled();
   });
 
-  it('maps plan limit errors per row', async () => {
+  it('includes base64 error file when requested', async () => {
     createTenantCustomer.execute
-      .mockResolvedValueOnce({ customer: { id: 'tc-1' } })
-      .mockRejectedValueOnce(new ApplicationError('PLAN_LIMIT', 'limit', 403));
+      .mockResolvedValueOnce({ customer: { id: 'tc-1' }, restored: false })
+      .mockRejectedValueOnce(new ApplicationError('CUSTOMER_EXISTS', 'exists', 409));
 
     const fileBuffer = await buildCustomerImportWorkbook([
       { phone: '09121111111', name: 'A' },
       { phone: '09122222222', name: 'B' },
     ]);
 
-    const result = await useCase.execute({ ...baseInput, fileBuffer });
+    const result = await useCase.execute({
+      ...baseInput,
+      fileBuffer,
+      includeErrorFile: true,
+    });
 
-    expect(result.successCount).toBe(1);
-    expect(result.errors).toEqual([
-      {
-        row: 3,
-        phone: '09122222222',
-        error: 'TENANT_PLAN_LIMIT_EXCEEDED',
-      },
-    ]);
+    expect(result.errorFileBase64).toBeTruthy();
+    expect(Buffer.from(result.errorFileBase64!, 'base64').length).toBeGreaterThan(0);
   });
 });

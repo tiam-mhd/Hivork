@@ -4,14 +4,18 @@ import { PassThrough } from 'node:stream';
 import type { FilterAst } from '@hivork/contracts/ui';
 
 import { UseCase } from '../core/use-case.js';
-import { ExportService } from '../core/export/export.service.js';
-import { PdfExportService } from '../core/export/pdf-export.service.js';
+import { mergeInstallmentsSettings } from '../installments/settings/merge-installments-settings.js';
 import type { AuditService } from '../ports/audit.port.js';
+import type {
+  ICustomerPdfExportWriter,
+  ICustomerXlsxExportWriter,
+} from '../ports/customer-export-writer.port.js';
 import type { IExportRateLimiterPort } from '../ports/export-rate-limiter.port.js';
 import type { ITenantRepository } from '../ports/tenant.repository.port.js';
+import type { ITenantSettingsRepository } from '../ports/tenant-settings.repository.port.js';
 import type {
   ITenantCustomerRepository,
-  TenantCustomerListItem,
+  TenantCustomerListLinkStatusFilter,
   TenantCustomerListSort,
 } from '../ports/tenant-customer.repository.port.js';
 import type { DataScopeStaffContext } from '../rbac/build-data-scope-filter.js';
@@ -36,7 +40,17 @@ export type ExportTenantCustomersInput = {
   sort?: TenantCustomerListSort;
   tags?: string[];
   status?: 'active' | 'suspended';
+  branchId?: string;
   defaultBranchId?: string;
+  categoryId?: string;
+  isBlacklisted?: boolean;
+  assignedStaffId?: string;
+  linkStatus?: TenantCustomerListLinkStatusFilter;
+  createdAtFrom?: Date;
+  createdAtTo?: Date;
+  lastPurchaseAtFrom?: Date;
+  lastPurchaseAtTo?: Date;
+  includeArchived?: boolean;
   columns?: string[];
   ids?: string[];
   locale?: 'fa-IR' | 'en';
@@ -68,8 +82,9 @@ export class ExportTenantCustomersUseCase
   constructor(
     private readonly repository: ITenantCustomerRepository,
     private readonly tenants: ITenantRepository,
-    private readonly exportService: ExportService,
-    private readonly pdfExportService: PdfExportService,
+    private readonly settings: ITenantSettingsRepository,
+    private readonly xlsxWriter: ICustomerXlsxExportWriter,
+    private readonly pdfWriter: ICustomerPdfExportWriter,
     private readonly audit: AuditService,
     private readonly rateLimiter: IExportRateLimiterPort,
   ) {}
@@ -79,11 +94,14 @@ export class ExportTenantCustomersUseCase
 
     const format = input.format ?? 'xlsx';
     const isPdf = format === 'pdf';
-    const rowLimit = isPdf ? (input.pdfMaxRows ?? DEFAULT_PDF_MAX_ROWS) : input.maxRows;
+    const tenantMaxRows = await this.resolveTenantExportMaxRows(input.tenantId);
+    const effectiveMaxRows = Math.min(input.maxRows, tenantMaxRows);
+    const rowLimit = isPdf ? Math.min(input.pdfMaxRows ?? DEFAULT_PDF_MAX_ROWS, effectiveMaxRows) : effectiveMaxRows;
 
     const context = await prepareCustomerListExport(
       {
         ...input,
+        branchId: input.branchId ?? input.defaultBranchId,
         maxRows: rowLimit,
         limitErrorCode: isPdf ? 'PDF_ROW_LIMIT' : 'EXPORT_LIMIT_EXCEEDED',
       },
@@ -91,7 +109,7 @@ export class ExportTenantCustomersUseCase
       this.tenants,
     );
 
-    const filename = buildExportFilename('customers', context.tenantSlug, format);
+    const filename = buildExportFilename(format);
 
     if (isPdf) {
       const items = await fetchAllCustomerExportRows(
@@ -103,14 +121,11 @@ export class ExportTenantCustomersUseCase
 
       const printColumns = mapCustomerColumnsToPrintHeaders(context.columns, context.locale);
       const printRows = mapCustomersToPrintRows(context.columns, items, context.locale);
-      const generatedAt = new Date();
 
-      const buffer = await this.pdfExportService.exportFromLayout({
-        title: context.locale === 'fa-IR' ? 'لیست مشتریان' : 'Customer list',
+      const buffer = await this.pdfWriter.exportCustomers({
         locale: context.locale,
-        orientation: 'portrait',
         tenant: context.tenantBranding,
-        generatedAt,
+        generatedAt: new Date(),
         columns: printColumns,
         rows: printRows,
       });
@@ -126,14 +141,9 @@ export class ExportTenantCustomersUseCase
     }
 
     const columns = resolveCustomerExportColumns(input.columns);
-    const moneyHeaderNote =
-      'مبالغ ستون تومان برای نمایش هستند؛ ستون ریال مقدار دقیق ذخیره‌شده در سیستم است.';
-
-    const { stream } = await this.exportService.exportToXlsx<TenantCustomerListItem>({
-      sheetName: 'مشتریان',
+    const { stream } = await this.xlsxWriter.exportCustomers({
       columns,
-      moneyHeaderNote: columns.some((column) => column.moneyRial) ? moneyHeaderNote : undefined,
-      maxRows: input.maxRows,
+      maxRows: rowLimit,
       fetchBatch: async (cursor) =>
         this.fetchBatch(input.tenantId, context.listOptionsBase, cursor),
     });
@@ -141,6 +151,12 @@ export class ExportTenantCustomersUseCase
     await this.logExportAudit(input, context.total, 'xlsx');
 
     return { stream, filename, rowCount: context.total, format: 'xlsx' };
+  }
+
+  private async resolveTenantExportMaxRows(tenantId: string): Promise<number> {
+    const stored = await this.settings.findByModule(tenantId, 'installments');
+    const installments = mergeInstallmentsSettings(stored);
+    return installments.customer_export_max_rows;
   }
 
   private async logExportAudit(
@@ -152,14 +168,13 @@ export class ExportTenantCustomersUseCase
       tenantId: input.tenantId,
       actorType: 'staff',
       actorId: input.actorId,
-      action: 'export.requested',
-      entityType: 'customers',
+      action: 'customer.export',
+      entityType: 'tenant_customer',
       entityId: input.tenantId,
       newValue: {
         rowCount,
         filterHash: hashExportPayload(input.filterHashPayload),
         format,
-        resourceKey: 'customers',
         selectedIds: input.ids?.length ?? 0,
       },
       ip: input.ip,
@@ -176,7 +191,14 @@ export class ExportTenantCustomersUseCase
   }
 }
 
-export function buildExportFilename(
+export function buildExportFilename(format: 'xlsx' | 'pdf' = 'xlsx'): string {
+  const date = new Date().toISOString().slice(0, 10);
+  const extension = format === 'pdf' ? 'pdf' : 'xlsx';
+  return `customers-${date}.${extension}`;
+}
+
+/** @deprecated Use `buildExportFilename(format)` */
+export function buildLegacyExportFilename(
   resourceKey: string,
   tenantSlug: string,
   format: 'xlsx' | 'pdf' = 'xlsx',

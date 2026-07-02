@@ -11,7 +11,13 @@ export type SaleSummary = {
   totalAmountRial: string;
   downPaymentRial: string;
   installmentCount: number;
-  status: 'active' | 'completed' | 'cancelled';
+  status:
+    | 'active'
+    | 'completed'
+    | 'cancelled'
+    | 'terminated'
+    | 'closed'
+    | 'archived';
   paidCount?: number;
   contractDate?: string;
   createdAt: string;
@@ -22,6 +28,9 @@ const SALE_STATUS_MAP: Record<string, SaleSummary['status']> = {
   ACTIVE: 'active',
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
+  TERMINATED: 'terminated',
+  CLOSED: 'closed',
+  ARCHIVED: 'archived',
 };
 
 export function mapSaleListItemToSummary(item: SaleListItem): SaleSummary {

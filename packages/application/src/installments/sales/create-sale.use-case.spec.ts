@@ -24,7 +24,7 @@ describe('CreateSaleUseCase', () => {
     saveMany: vi.fn(),
     findBySaleId: vi.fn(),
   };
-  const tenantCustomers = { findActiveById: vi.fn() };
+  const tenantCustomers = { findDetailById: vi.fn() };
   const branches = { existsActiveInTenant: vi.fn() };
   const tenantPlans = { getMaxCustomers: vi.fn(), getMaxActiveSales: vi.fn() };
   const idempotency = { find: vi.fn(), store: vi.fn() };
@@ -98,7 +98,10 @@ describe('CreateSaleUseCase', () => {
     vi.clearAllMocks();
     idempotency.find.mockResolvedValue(null);
     branches.existsActiveInTenant.mockResolvedValue(true);
-    tenantCustomers.findActiveById.mockResolvedValue({ id: baseInput.tenantCustomerId });
+    tenantCustomers.findDetailById.mockResolvedValue({
+      id: baseInput.tenantCustomerId,
+      isBlacklisted: false,
+    });
     tenantPlans.getMaxActiveSales.mockResolvedValue(100);
     sales.countActive.mockResolvedValue(0);
     sales.save.mockResolvedValue(savedSale);
@@ -213,8 +216,20 @@ describe('CreateSaleUseCase', () => {
     });
   });
 
+  it('rejects blacklisted customer', async () => {
+    tenantCustomers.findDetailById.mockResolvedValue({
+      id: baseInput.tenantCustomerId,
+      isBlacklisted: true,
+    });
+
+    await expect(useCase.execute(baseInput)).rejects.toMatchObject({
+      code: 'CUSTOMER_BLACKLISTED',
+      httpStatus: 403,
+    });
+  });
+
   it('rejects missing customer', async () => {
-    tenantCustomers.findActiveById.mockResolvedValue(null);
+    tenantCustomers.findDetailById.mockResolvedValue(null);
 
     await expect(useCase.execute(baseInput)).rejects.toMatchObject({
       code: 'CUSTOMER_NOT_FOUND',

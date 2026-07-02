@@ -1,6 +1,5 @@
 import {
   CreateSaleUseCase,
-  CreateTenantCustomerUseCase,
   GetSaleUseCase,
   ListInstallmentsUseCase,
   ListOverdueInstallmentsUseCase,
@@ -10,7 +9,6 @@ import {
 import {
   PrismaAuditService,
   PrismaBranchReader,
-  PrismaGlobalCustomerRepository,
   PrismaInstallmentRepository,
   PrismaOutboxPublisher,
   PrismaOverdueReportRepository,
@@ -20,6 +18,7 @@ import {
   PrismaTenantCustomerRepository,
   PrismaTenantPlanReader,
   PrismaUnitOfWork,
+  buildCreateTenantCustomerUseCase,
 } from '@hivork/infrastructure';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -87,7 +86,6 @@ function buildUseCases(prisma: PrismaService) {
   const sales = new PrismaSaleRepository(prisma);
   const installments = new PrismaInstallmentRepository(prisma);
   const tenantCustomers = new PrismaTenantCustomerRepository(prisma);
-  const globalCustomers = new PrismaGlobalCustomerRepository(prisma);
   const branches = new PrismaBranchReader(prisma);
   const tenantPlans = new PrismaTenantPlanReader(prisma);
   const audit = new PrismaAuditService(prisma);
@@ -96,13 +94,7 @@ function buildUseCases(prisma: PrismaService) {
   const overdueReport = new PrismaOverdueReportRepository(prisma);
 
   return {
-    createCustomer: new CreateTenantCustomerUseCase(
-      globalCustomers,
-      tenantCustomers,
-      branches,
-      tenantPlans,
-      audit,
-    ),
+    createCustomer: buildCreateTenantCustomerUseCase(prisma),
     listCustomers: new ListTenantCustomersUseCase(tenantCustomers),
     createSale: new CreateSaleUseCase(
       unitOfWork,

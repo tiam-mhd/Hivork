@@ -6,6 +6,8 @@ export type TenantCustomerCursorPayload = {
   name?: string | null;
   lastPurchaseAt?: string | null;
   overdueCount?: number;
+  creditScore?: number;
+  totalPurchaseRial?: string;
 };
 
 export type TenantCustomerListSort =
@@ -16,7 +18,11 @@ export type TenantCustomerListSort =
   | 'lastPurchaseAt:desc'
   | 'lastPurchaseAt:asc'
   | 'overdueCount:desc'
-  | 'overdueCount:asc';
+  | 'overdueCount:asc'
+  | 'creditScore:desc'
+  | 'creditScore:asc'
+  | 'totalPurchaseRial:desc'
+  | 'totalPurchaseRial:asc';
 
 export function encodeTenantCustomerCursor(
   sort: TenantCustomerListSort,
@@ -26,6 +32,8 @@ export function encodeTenantCustomerCursor(
     globalCustomer: { name: string | null };
     lastPurchaseAt: Date | null;
     overdueCount: number;
+    creditScore: number;
+    totalPurchaseRial: bigint;
   },
 ): string {
   const payload: TenantCustomerCursorPayload = { id: item.id };
@@ -46,6 +54,14 @@ export function encodeTenantCustomerCursor(
     case 'overdueCount:desc':
     case 'overdueCount:asc':
       payload.overdueCount = item.overdueCount;
+      break;
+    case 'creditScore:desc':
+    case 'creditScore:asc':
+      payload.creditScore = item.creditScore;
+      break;
+    case 'totalPurchaseRial:desc':
+    case 'totalPurchaseRial:asc':
+      payload.totalPurchaseRial = item.totalPurchaseRial.toString();
       break;
   }
 
@@ -91,6 +107,18 @@ export function decodeTenantCustomerCursor(
       case 'overdueCount:asc':
         if (typeof parsed.overdueCount !== 'number') {
           throw new Error('invalid overdueCount cursor');
+        }
+        break;
+      case 'creditScore:desc':
+      case 'creditScore:asc':
+        if (typeof parsed.creditScore !== 'number') {
+          throw new Error('invalid creditScore cursor');
+        }
+        break;
+      case 'totalPurchaseRial:desc':
+      case 'totalPurchaseRial:asc':
+        if (typeof parsed.totalPurchaseRial !== 'string') {
+          throw new Error('invalid totalPurchaseRial cursor');
         }
         break;
     }

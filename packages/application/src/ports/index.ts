@@ -145,6 +145,7 @@ export {
   type DeletedTenantCustomerRecord,
   type TenantCustomerListItem,
   type TenantCustomerListSort,
+  type TenantCustomerListLinkStatusFilter,
   type TenantCustomerListScope,
   type TenantCustomerFullDetail,
   type TenantCustomerGlobalProfile,
@@ -154,15 +155,103 @@ export {
   type ListActiveTenantCustomersOptions,
   type ListActiveTenantCustomersResult,
   type CreateTenantCustomerLinkInput,
+  type TenantCustomerDetailWithRelationsRecord,
+  type TenantCustomerStatus,
+  type PreferredContactChannel,
   type RestoreTenantCustomerLinkInput,
   type UpdateTenantCustomerLinkInput,
 } from './tenant-customer.repository.port.js';
+export {
+  CUSTOMER_DOCUMENT_REPOSITORY,
+  type CreateCustomerDocumentInput,
+  type CustomerDocumentRecord,
+  type CustomerDocumentType,
+  type ICustomerDocumentRepository,
+  type ListCustomerDocumentsOptions,
+} from './customer-document.repository.port.js';
+export {
+  type CustomerTimelineEventRecord,
+  type CustomerTimelineEventType,
+  type CustomerTimelineScopeFilter,
+  type ICustomerTimelineRepository,
+  type ListCustomerTimelineOptions,
+} from './customer-timeline.repository.port.js';
+export {
+  type CustomerPaymentListRecord,
+  type CustomerPaymentScopeFilter,
+  type CustomerPaymentStatus,
+  type CustomerPaymentSummaryRecord,
+  type ICustomerPaymentsRepository,
+  type ListCustomerPaymentsOptions,
+  type SummarizeCustomerPaymentsOptions,
+} from './customer-payments.repository.port.js';
+export {
+  type CustomerContractListRecord,
+  type CustomerContractScopeFilter,
+  type CustomerContractStatus,
+  type ICustomerContractsRepository,
+  type ListCustomerContractsOptions,
+} from './customer-contracts.repository.port.js';
+export {
+  CUSTOMER_NOTE_REPOSITORY,
+  type CreateCustomerNoteInput,
+  type CustomerNoteRecord,
+  type CustomerNoteRecordWithAuthor,
+  type ICustomerNoteRepository,
+  type ListCustomerNotesOptions,
+  type UpdateCustomerNoteInput,
+} from './customer-note.repository.port.js';
+export {
+  CUSTOMER_CONTACT_PHONE_REPOSITORY,
+  type CreateCustomerContactPhonesInput,
+  type CustomerContactPhoneLabel,
+  type CustomerContactPhoneRecord,
+  type ICustomerContactPhoneRepository,
+  type ListCustomerContactPhonesOptions,
+  type UpsertCustomerContactPhoneItem,
+  type UpsertCustomerContactPhonesInput,
+  type SyncCustomerContactPhoneItem,
+  type SyncCustomerContactPhonesInput,
+} from './customer-contact-phone.repository.port.js';
+export {
+  CUSTOMER_ADDRESS_REPOSITORY,
+  type CreateCustomerAddressItem,
+  type CreateCustomerAddressesInput,
+  type SyncCustomerAddressItem,
+  type SyncCustomerAddressesInput,
+  type CustomerAddressLabel,
+  type CustomerAddressRecord,
+  type ICustomerAddressRepository,
+  type ListCustomerAddressesOptions,
+} from './customer-address.repository.port.js';
+export {
+  CUSTOMER_EMERGENCY_CONTACT_REPOSITORY,
+  type CreateCustomerEmergencyContactItem,
+  type CreateCustomerEmergencyContactsInput,
+  type SyncCustomerEmergencyContactItem,
+  type SyncCustomerEmergencyContactsInput,
+  type CustomerEmergencyContactRecord,
+  type EmergencyContactRelation,
+  type ICustomerEmergencyContactRepository,
+  type ListCustomerEmergencyContactsOptions,
+} from './customer-emergency-contact.repository.port.js';
+export {
+  CUSTOMER_CATEGORY_READER,
+  type ICustomerCategoryReader,
+  type CustomerCategoryLookupResult,
+} from './customer-category.reader.port.js';
 export {
   type ISaleRepository,
   type SaleRecord,
   type CreateSalePersistenceInput,
   type SaveSalePersistenceInput,
   type UpdateSalePersistenceInput,
+  type UpdateSaleFinancialsPersistenceInput,
+  type ExtendSalePersistenceInput,
+  type TerminateSalePersistenceInput,
+  type CloseSalePersistenceInput,
+  type ArchiveSalePersistenceInput,
+  type UnarchiveSalePersistenceInput,
   type SaleCustomerEmbed,
   type SaleListItem,
   type SaleDetailRecord,
@@ -173,9 +262,80 @@ export {
   SALE_REPOSITORY,
 } from './sale.repository.port.js';
 export {
+  type IContractVersionRepository,
+  type ContractVersionRecord,
+  type ContractVersionSnapshot,
+  type ContractVersionChangeType,
+  type AppendContractVersionInput,
+} from './contract-version.repository.port.js';
+export {
+  CONTRACT_NUMBER_ALLOCATOR,
+  type IContractNumberAllocator,
+} from './contract-number-allocator.port.js';
+export {
+  CONTRACT_NUMBER_SEQUENCE_KEY,
+  TENANT_SEQUENCE_REPOSITORY,
+  type ITenantSequenceRepository,
+} from './tenant-sequence.repository.port.js';
+export {
+  SALE_COPY_RELATED_REPOSITORY,
+  type ISaleCopyRelatedRepository,
+  type SaleCopyLineItemRecord,
+  type SaleCopyGuarantorRecord,
+} from './sale-copy-related.repository.port.js';
+export {
+  INSTALLMENT_SCHEDULE_EXTENDER,
+  type ExtendInstallmentScheduleInput,
+  type IInstallmentScheduleExtender,
+} from './installment-schedule-extender.port.js';
+export {
+  INSTALLMENT_CLOSE_WAIVER,
+  type IInstallmentCloseWaiver,
+  type WaiveRemainingOnCloseInput,
+} from './installment-close-waiver.port.js';
+export {
+  type ISaleLineItemRepository,
+  type SaleLineItemRecord,
+  type CreateSaleLineItemInput,
+  type UpdateSaleLineItemInput,
+  type ReplaceSaleLineItemsInput,
+  type ListSaleLineItemsOptions,
+  SALE_LINE_ITEM_REPOSITORY,
+} from './sale-line-item.repository.port.js';
+export {
+  type IContractCollateralRepository,
+  type ContractCollateralRecord,
+  type CollateralType,
+  type CollateralStatus,
+  type CreateContractCollateralInput,
+  type UpdateContractCollateralInput,
+  type UpdateContractCollateralStatusInput,
+  type ListContractCollateralsOptions,
+  CONTRACT_COLLATERAL_REPOSITORY,
+} from './contract-collateral.repository.port.js';
+export {
+  type IContractGuarantorRepository,
+  type ContractGuarantorRecord,
+  type GuarantorRelationship,
+  type CreateContractGuarantorInput,
+  type UpdateContractGuarantorInput,
+  type ListContractGuarantorsOptions,
+  CONTRACT_GUARANTOR_REPOSITORY,
+} from './contract-guarantor.repository.port.js';
+export {
+  type IContractAttachmentRepository,
+  type ContractAttachmentRecord,
+  type ContractAttachmentType,
+  type CreateContractAttachmentInput,
+  type ListContractAttachmentsOptions,
+  CONTRACT_ATTACHMENT_REPOSITORY,
+} from './contract-attachment.repository.port.js';
+export {
   type IInstallmentRepository,
   type InstallmentRecord,
   type SaveInstallmentPersistenceInput,
+  type RegenerateInstallmentScheduleInput,
+  type UpdateInstallmentAmountInput,
   type InstallmentListItem,
   type InstallmentListSort,
   type InstallmentCursorPosition,
@@ -195,6 +355,19 @@ export {
   CUSTOMER_IMPORT_IDEMPOTENCY_STORE,
   CUSTOMER_IMPORT_IDEMPOTENCY_TTL_SECONDS,
 } from './customer-import-idempotency.port.js';
+export {
+  type ICustomerMergeIdempotencyStore,
+  type CustomerMergeIdempotencyResult,
+  type CustomerMergeIdempotencyCachedRecord,
+  CUSTOMER_MERGE_IDEMPOTENCY_STORE,
+  CUSTOMER_MERGE_IDEMPOTENCY_TTL_SECONDS,
+} from './customer-merge-idempotency.port.js';
+export {
+  type ITenantCustomerMergeRepository,
+  type ReassignCustomerRelatedRecordsInput,
+  type ReassignCustomerRelatedRecordsResult,
+  TENANT_CUSTOMER_MERGE_REPOSITORY,
+} from './tenant-customer-merge.repository.port.js';
 export { type IUnitOfWork, UNIT_OF_WORK } from './unit-of-work.port.js';
 export {
   type IPaymentAttemptRepository,

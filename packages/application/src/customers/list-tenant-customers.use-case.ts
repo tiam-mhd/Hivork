@@ -1,11 +1,10 @@
 import { ApplicationError } from '../errors/application.error.js';
-import { normalizePhone } from '@hivork/contracts';
 import type { FilterAst } from '@hivork/contracts/ui';
 import { UseCase } from '../core/use-case.js';
-import { buildListWhere } from '../core/list/build-list-where.js';
 import type {
   ITenantCustomerRepository,
   TenantCustomerListItem,
+  TenantCustomerListLinkStatusFilter,
   TenantCustomerListSort,
 } from '../ports/tenant-customer.repository.port.js';
 import {
@@ -13,8 +12,8 @@ import {
   type DataScopeStaffContext,
 } from '../rbac/build-data-scope-filter.js';
 import {
-  CUSTOMER_FILTER_FIELD_MAP,
-  CUSTOMER_SEARCH_FIELDS,
+  buildCustomerListWhere,
+  isCustomerSearchActionable,
 } from './customer-list-query.config.js';
 import {
   decodeTenantCustomerCursor,
@@ -32,13 +31,24 @@ export type ListTenantCustomersInput = {
   tags?: string[];
   status?: 'active' | 'suspended';
   defaultBranchId?: string;
+  branchId?: string;
+  categoryId?: string;
+  isBlacklisted?: boolean;
+  assignedStaffId?: string;
+  linkStatus?: TenantCustomerListLinkStatusFilter;
+  createdAtFrom?: Date;
+  createdAtTo?: Date;
+  lastPurchaseAtFrom?: Date;
+  lastPurchaseAtTo?: Date;
+  includeArchived?: boolean;
+  includeCount?: boolean;
   staffContext: DataScopeStaffContext;
 };
 
 export type ListTenantCustomersOutput = {
   data: TenantCustomerListItem[];
   meta: {
-    total: number;
+    total?: number;
     hasNext: boolean;
     nextCursor: string | null;
   };
@@ -53,6 +63,10 @@ const ALLOWED_SORTS: TenantCustomerListSort[] = [
   'lastPurchaseAt:asc',
   'overdueCount:desc',
   'overdueCount:asc',
+  'creditScore:desc',
+  'creditScore:asc',
+  'totalPurchaseRial:desc',
+  'totalPurchaseRial:asc',
 ];
 
 export class ListTenantCustomersUseCase
@@ -71,28 +85,30 @@ export class ListTenantCustomersUseCase
       throw new ApplicationError('VALIDATION_ERROR', 'Invalid sort field.', 400);
     }
 
-    if (input.defaultBranchId) {
-      this.assertBranchDataScope(input.staffContext, input.defaultBranchId);
+    const branchId = input.branchId ?? input.defaultBranchId;
+    if (branchId) {
+      this.assertBranchDataScope(input.staffContext, branchId);
     }
 
     if (
       input.staffContext.dataScope === 'branch' &&
       resolveEffectiveBranchIds(input.staffContext).length === 0
     ) {
-      return { data: [], meta: { total: 0, hasNext: false, nextCursor: null } };
+      return { data: [], meta: { hasNext: false, nextCursor: null } };
+    }
+
+    if (input.search?.trim() && !isCustomerSearchActionable(input.search)) {
+      return { data: [], meta: { hasNext: false, nextCursor: null } };
     }
 
     const cursorPayload = input.cursor
       ? decodeTenantCustomerCursor(input.cursor, sort)
       : undefined;
 
-    const listWhere = buildListWhere({
+    const listWhere = buildCustomerListWhere({
       tenantId: input.tenantId,
       search: input.search,
-      searchFields: CUSTOMER_SEARCH_FIELDS,
-      phoneNormalize: normalizePhone,
       filter: input.filter,
-      fieldMap: CUSTOMER_FILTER_FIELD_MAP,
     });
 
     const result = await this.repository.listActive(input.tenantId, {
@@ -101,7 +117,17 @@ export class ListTenantCustomersUseCase
       listWhere,
       tags: input.tags?.length ? input.tags : undefined,
       status: input.status ?? 'active',
-      defaultBranchId: input.defaultBranchId,
+      branchId,
+      categoryId: input.categoryId,
+      isBlacklisted: input.isBlacklisted,
+      assignedStaffId: input.assignedStaffId,
+      linkStatus: input.linkStatus,
+      createdAtFrom: input.createdAtFrom,
+      createdAtTo: input.createdAtTo,
+      lastPurchaseAtFrom: input.lastPurchaseAtFrom,
+      lastPurchaseAtTo: input.lastPurchaseAtTo,
+      includeArchived: input.includeArchived,
+      includeCount: input.includeCount,
       cursor: cursorPayload
         ? {
             id: cursorPayload.id,
@@ -114,6 +140,11 @@ export class ListTenantCustomersUseCase
                   ? new Date(cursorPayload.lastPurchaseAt)
                   : null,
             overdueCount: cursorPayload.overdueCount,
+            creditScore: cursorPayload.creditScore,
+            totalPurchaseRial:
+              cursorPayload.totalPurchaseRial !== undefined
+                ? BigInt(cursorPayload.totalPurchaseRial)
+                : undefined,
           }
         : undefined,
       scope: this.buildScope(input.staffContext, input.actorId),
@@ -128,13 +159,15 @@ export class ListTenantCustomersUseCase
             globalCustomer: lastItem.globalCustomer,
             lastPurchaseAt: lastItem.lastPurchaseAt,
             overdueCount: lastItem.overdueCount,
+            creditScore: lastItem.creditScore,
+            totalPurchaseRial: lastItem.totalPurchaseRial,
           })
         : null;
 
     return {
       data: result.items,
       meta: {
-        total: result.total,
+        ...(result.total !== undefined ? { total: result.total } : {}),
         hasNext: result.hasMore,
         nextCursor,
       },

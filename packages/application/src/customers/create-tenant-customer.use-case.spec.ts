@@ -3,9 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { CreateTenantCustomerUseCase } from './create-tenant-customer.use-case.js';
 
 describe('CreateTenantCustomerUseCase', () => {
-  const users = {
-    findOrCreateByPhone: vi.fn(),
-  };
+  const users = { findOrCreateByPhone: vi.fn() };
   const globalCustomers = {
     findByPhoneIncludingDeleted: vi.fn(),
     createWithProfile: vi.fn(),
@@ -17,17 +15,32 @@ describe('CreateTenantCustomerUseCase', () => {
     countActive: vi.fn(),
     createLink: vi.fn(),
     restoreLinkAndUpdate: vi.fn(),
+    findDetailWithRelationsById: vi.fn(),
   };
+  const addresses = { createMany: vi.fn() };
+  const emergencyContacts = { createMany: vi.fn() };
+  const contactPhones = { createMany: vi.fn() };
+  const categories = { existsActiveInTenant: vi.fn() };
+  const staff = { findActiveByIdForTenant: vi.fn() };
   const branches = { existsActiveInTenant: vi.fn() };
   const tenantPlans = { getMaxCustomers: vi.fn() };
+  const unitOfWork = {
+    transaction: vi.fn(async (work: (tx: unknown) => Promise<unknown>) => work({})),
+  };
   const audit = { log: vi.fn() };
 
   const useCase = new CreateTenantCustomerUseCase(
     users as never,
     globalCustomers as never,
     tenantCustomers as never,
+    addresses as never,
+    emergencyContacts as never,
+    contactPhones as never,
+    categories as never,
+    staff as never,
     branches as never,
     tenantPlans as never,
+    unitOfWork as never,
     audit,
   );
 
@@ -54,6 +67,13 @@ describe('CreateTenantCustomerUseCase', () => {
       name: 'علی',
       status: 'active',
     });
+    tenantCustomers.findDetailWithRelationsById.mockImplementation(async (id: string) => ({
+      ...tenantCustomer,
+      id,
+      addresses: [],
+      emergencyContacts: [],
+      contactPhones: [],
+    }));
   });
 
   const globalCustomer = {
@@ -93,15 +113,14 @@ describe('CreateTenantCustomerUseCase', () => {
     lastPurchaseAt: null,
     createdAt: new Date('2026-01-01'),
     createdById: 'staff-1',
+    categoryId: null,
+    status: 'active' as const,
+    isBlacklisted: false,
+    blacklistReason: null,
+    assignedStaffId: null,
   };
 
   it('creates global and tenant customer link', async () => {
-    users.findOrCreateByPhone.mockResolvedValue({
-      id: 'user-1',
-      phone: '09123456789',
-      name: 'علی',
-      status: 'active',
-    });
     globalCustomers.findByPhoneIncludingDeleted.mockResolvedValue(null);
     globalCustomers.createWithProfile.mockResolvedValue(globalCustomer);
     tenantCustomers.findLinkByGlobalCustomerId.mockResolvedValue(null);
@@ -119,6 +138,24 @@ describe('CreateTenantCustomerUseCase', () => {
     expect(audit.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'customer.create', entityType: 'tenant_customer' }),
     );
+  });
+
+  it('creates nested addresses and contact phones in transaction', async () => {
+    globalCustomers.findByPhoneIncludingDeleted.mockResolvedValue(null);
+    globalCustomers.createWithProfile.mockResolvedValue(globalCustomer);
+    tenantCustomers.findLinkByGlobalCustomerId.mockResolvedValue(null);
+    tenantPlans.getMaxCustomers.mockResolvedValue(500);
+    tenantCustomers.countActive.mockResolvedValue(1);
+    tenantCustomers.createLink.mockResolvedValue(tenantCustomer);
+
+    await useCase.execute({
+      ...baseInput,
+      addresses: [{ line1: 'خیابان اصلی', isPrimary: true }],
+      contactPhones: [{ phone: '09120000001', label: 'mobile' }],
+    });
+
+    expect(addresses.createMany).toHaveBeenCalled();
+    expect(contactPhones.createMany).toHaveBeenCalled();
   });
 
   it('rejects duplicate active tenant link', async () => {
@@ -160,6 +197,20 @@ describe('CreateTenantCustomerUseCase', () => {
 
     await expect(useCase.execute(baseInput)).rejects.toMatchObject({
       code: 'PLAN_LIMIT',
+      httpStatus: 403,
+    });
+  });
+
+  it('rejects blacklist without permission', async () => {
+    await expect(
+      useCase.execute({
+        ...baseInput,
+        isBlacklisted: true,
+        blacklistReason: 'bad payer',
+        canBlacklist: false,
+      }),
+    ).rejects.toMatchObject({
+      code: 'PERMISSION_DENIED',
       httpStatus: 403,
     });
   });

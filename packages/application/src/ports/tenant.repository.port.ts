@@ -22,6 +22,7 @@ export type TenantDetailRecord = {
   enabledModules: string[];
   trialEndsAt: Date | null;
   onboardingCompletedAt: Date | null;
+  metadata: unknown | null;
 };
 
 export interface ITenantRepository {

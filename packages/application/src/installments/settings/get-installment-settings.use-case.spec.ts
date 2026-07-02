@@ -38,12 +38,18 @@ describe('mergeInstallmentsSettings', () => {
 describe('GetInstallmentSettingsUseCase', () => {
   const moduleEntitlement = { assertModuleEnabled: vi.fn() };
   const settingsRepository = { findByModule: vi.fn(), upsert: vi.fn() };
-  const useCase = new GetInstallmentSettingsUseCase(moduleEntitlement, settingsRepository);
+  const sequences = { peekNextValue: vi.fn(), allocateNextValue: vi.fn() };
+  const useCase = new GetInstallmentSettingsUseCase(
+    moduleEntitlement,
+    settingsRepository,
+    sequences,
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
     moduleEntitlement.assertModuleEnabled.mockResolvedValue(undefined);
     settingsRepository.findByModule.mockResolvedValue({});
+    sequences.peekNextValue.mockResolvedValue(1);
   });
 
   it('returns defaults when nothing is stored', async () => {
@@ -51,7 +57,11 @@ describe('GetInstallmentSettingsUseCase', () => {
 
     expect(moduleEntitlement.assertModuleEnabled).toHaveBeenCalledWith('tenant-1', 'installments');
     expect(settingsRepository.findByModule).toHaveBeenCalledWith('tenant-1', 'installments');
-    expect(result.installments).toEqual(DEFAULT_INSTALLMENTS_SETTINGS);
+    expect(sequences.peekNextValue).toHaveBeenCalledWith('tenant-1', 'contract_number');
+    expect(result.installments).toEqual({
+      ...DEFAULT_INSTALLMENTS_SETTINGS,
+      contract_number_next_sequence: 1,
+    });
   });
 
   it('returns merged settings when partial values are stored', async () => {
@@ -59,12 +69,14 @@ describe('GetInstallmentSettingsUseCase', () => {
       default_installment_count: 24,
       overdue_escalation_days: [2, 5],
     });
+    sequences.peekNextValue.mockResolvedValue(42);
 
     const result = await useCase.execute({ tenantId: 'tenant-1' });
 
     expect(result.installments.default_installment_count).toBe(24);
     expect(result.installments.overdue_escalation_days).toEqual([2, 5]);
     expect(result.installments.reminder_days_before).toEqual([3, 1]);
+    expect(result.installments.contract_number_next_sequence).toBe(42);
   });
 
   it('rejects when installments module is not enabled', async () => {

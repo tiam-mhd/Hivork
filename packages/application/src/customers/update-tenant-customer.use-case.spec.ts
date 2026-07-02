@@ -1,27 +1,65 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { maskCustomerAuditRecord } from './customer-audit-mask.js';
 import { UpdateTenantCustomerUseCase } from './update-tenant-customer.use-case.js';
+
+describe('maskCustomerAuditRecord', () => {
+  it('masks PII fields in audit diff', () => {
+    const masked = maskCustomerAuditRecord({
+      nationalId: '1234567890',
+      email: 'ali@example.com',
+      notes: 'secret note',
+      internalNotes: 'internal',
+      blacklistReason: 'fraud',
+      localCode: 'C-1',
+    });
+
+    expect(masked.nationalId).toBe('******7890');
+    expect(masked.email).toBe('a***@example.com');
+    expect(masked.notes).toBe('[redacted]');
+    expect(masked.internalNotes).toBe('[redacted]');
+    expect(masked.blacklistReason).toBe('[redacted]');
+    expect(masked.localCode).toBe('C-1');
+  });
+});
 
 describe('UpdateTenantCustomerUseCase', () => {
   const tenantCustomers = {
     findActiveById: vi.fn(),
     findDeletedById: vi.fn(),
-    findDetailById: vi.fn(),
+    findDetailWithRelationsById: vi.fn(),
     updateLink: vi.fn(),
   };
-  const globalCustomers = { updateProfile: vi.fn() };
+  const globalCustomers = {
+    findById: vi.fn(),
+    updateProfile: vi.fn(),
+  };
+  const addresses = { syncMany: vi.fn() };
+  const emergencyContacts = { syncMany: vi.fn() };
+  const contactPhones = { syncMany: vi.fn() };
+  const categories = { existsActiveInTenant: vi.fn() };
+  const staffRepo = { findActiveByIdForTenant: vi.fn() };
   const branches = { existsActiveInTenant: vi.fn() };
   const sales = {
     hasSaleForTenantCustomerInBranches: vi.fn(),
     hasSaleForTenantCustomerByStaff: vi.fn(),
+  };
+  const unitOfWork = {
+    transaction: vi.fn(async (fn: (tx: unknown) => Promise<void>) => fn({})),
   };
   const audit = { log: vi.fn() };
 
   const useCase = new UpdateTenantCustomerUseCase(
     tenantCustomers as never,
     globalCustomers as never,
+    addresses as never,
+    emergencyContacts as never,
+    contactPhones as never,
+    categories as never,
+    staffRepo as never,
     branches as never,
     sales as never,
+    unitOfWork as never,
     audit,
   );
 
@@ -57,6 +95,14 @@ describe('UpdateTenantCustomerUseCase', () => {
     lastPurchaseAt: null,
     createdAt: new Date('2026-01-01'),
     createdById: 'staff-1',
+    categoryId: null,
+    status: 'active' as const,
+    isBlacklisted: false,
+    blacklistReason: null,
+    assignedStaffId: null,
+    addresses: [],
+    emergencyContacts: [],
+    contactPhones: [],
   };
 
   const updatedDetail = {
@@ -72,26 +118,38 @@ describe('UpdateTenantCustomerUseCase', () => {
     version: 2,
     staffContext,
     canUpdateInternalNotes: true,
+    canBlacklist: true,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
     tenantCustomers.findActiveById.mockResolvedValue(existing);
-    tenantCustomers.findDetailById.mockResolvedValue(detail);
+    tenantCustomers.findDetailWithRelationsById
+      .mockResolvedValueOnce(detail)
+      .mockResolvedValue(updatedDetail);
     tenantCustomers.updateLink.mockResolvedValue(updatedDetail);
+    globalCustomers.findById.mockResolvedValue({
+      id: 'global-1',
+      phone: '09121234567',
+      name: 'علی',
+      status: 'active',
+      userId: 'user-1',
+    });
+    globalCustomers.updateProfile.mockResolvedValue({});
   });
 
-  it('updates allowed fields and audits customer.update', async () => {
+  it('updates allowed fields and audits customer.update with masked PII', async () => {
     const result = await useCase.execute({
       ...baseInput,
       notes: 'new note',
       name: 'علی جدید',
+      nationalId: '1234567890',
     });
 
     expect(result.notes).toBe('new note');
     expect(globalCustomers.updateProfile).toHaveBeenCalledWith(
       'global-1',
-      expect.objectContaining({ name: 'علی جدید' }),
+      expect.objectContaining({ name: 'علی جدید', nationalId: '1234567890' }),
     );
     expect(tenantCustomers.updateLink).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -99,12 +157,16 @@ describe('UpdateTenantCustomerUseCase', () => {
         version: 2,
         notes: 'new note',
       }),
+      expect.anything(),
     );
     expect(audit.log).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'customer.update',
         entityType: 'tenant_customer',
         entityId: 'tc-1',
+        newValue: expect.objectContaining({
+          nationalId: '******7890',
+        }),
       }),
     );
   });
@@ -170,6 +232,38 @@ describe('UpdateTenantCustomerUseCase', () => {
     });
   });
 
+  it('denies blacklist without permission', async () => {
+    await expect(
+      useCase.execute({
+        ...baseInput,
+        canBlacklist: false,
+        isBlacklisted: true,
+        blacklistReason: 'bad payer',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PERMISSION_DENIED',
+      httpStatus: 403,
+    });
+  });
+
+  it('rejects archived customer updates', async () => {
+    tenantCustomers.findDetailWithRelationsById.mockReset();
+    tenantCustomers.findDetailWithRelationsById.mockResolvedValue({
+      ...detail,
+      status: 'archived',
+    });
+
+    await expect(
+      useCase.execute({
+        ...baseInput,
+        notes: 'x',
+      }),
+    ).rejects.toMatchObject({
+      code: 'CUSTOMER_ARCHIVED',
+      httpStatus: 409,
+    });
+  });
+
   it('returns 404 when branch scope denies access', async () => {
     sales.hasSaleForTenantCustomerInBranches.mockResolvedValue(false);
 
@@ -190,16 +284,27 @@ describe('UpdateTenantCustomerUseCase', () => {
     });
   });
 
-  it('dedupes tags through repository update', async () => {
+  it('syncs nested addresses inside transaction', async () => {
+    tenantCustomers.findDetailWithRelationsById.mockReset();
+    tenantCustomers.findDetailWithRelationsById
+      .mockResolvedValueOnce(detail)
+      .mockResolvedValue({
+        ...detail,
+        addresses: [{ id: 'addr-1', line1: 'خیابان جدید' }],
+        version: 3,
+      });
+
     await useCase.execute({
       ...baseInput,
-      tags: ['vip', 'vip', 'new'],
+      addresses: [{ line1: 'خیابان جدید', isPrimary: true }],
     });
 
-    expect(tenantCustomers.updateLink).toHaveBeenCalledWith(
+    expect(addresses.syncMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        tags: ['vip', 'vip', 'new'],
+        tenantCustomerId: 'tc-1',
+        items: [{ line1: 'خیابان جدید', isPrimary: true }],
       }),
+      expect.anything(),
     );
   });
 });

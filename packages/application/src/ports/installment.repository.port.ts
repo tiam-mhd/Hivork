@@ -84,6 +84,24 @@ export type ListInstallmentsResult = {
   totalAmountRial?: bigint;
 };
 
+export type UpdateInstallmentAmountInput = {
+  id: string;
+  tenantId: string;
+  amountRial: bigint;
+  updatedById: string;
+};
+
+export type RegenerateInstallmentScheduleInput = {
+  tenantId: string;
+  saleId: string;
+  totalAmountRial: bigint;
+  downPaymentRial: bigint;
+  installmentCount: number;
+  firstDueDate: Date;
+  intervalDays: number;
+  updatedById: string;
+};
+
 export interface IInstallmentRepository {
   saveMany(
     inputs: SaveInstallmentPersistenceInput[],
@@ -92,6 +110,10 @@ export interface IInstallmentRepository {
   findBySaleId(
     tenantId: string,
     saleId: string,
+    tx?: OutboxTransaction,
+  ): Promise<InstallmentRecord[]>;
+  regeneratePendingAmounts(
+    input: RegenerateInstallmentScheduleInput,
     tx?: OutboxTransaction,
   ): Promise<InstallmentRecord[]>;
   list(tenantId: string, options: ListInstallmentsQueryOptions): Promise<ListInstallmentsResult>;

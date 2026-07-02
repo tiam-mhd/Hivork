@@ -3,16 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { buildExportFilename, hashExportPayload } from './export-tenant-customers.use-case.js';
 
 describe('export tenant customers helpers', () => {
-  it('builds xlsx filename with resource and tenant slug', () => {
-    expect(buildExportFilename('customers', 'demo-shop')).toMatch(
-      /^customers-demo-shop-\d{4}-\d{2}-\d{2}\.xlsx$/,
-    );
+  it('builds xlsx filename with date', () => {
+    expect(buildExportFilename('xlsx')).toMatch(/^customers-\d{4}-\d{2}-\d{2}\.xlsx$/);
   });
 
   it('builds pdf filename with pdf extension', () => {
-    expect(buildExportFilename('customers', 'demo-shop', 'pdf')).toMatch(
-      /^customers-demo-shop-\d{4}-\d{2}-\d{2}\.pdf$/,
-    );
+    expect(buildExportFilename('pdf')).toMatch(/^customers-\d{4}-\d{2}-\d{2}\.pdf$/);
   });
 
   it('hashes export payload deterministically', () => {

@@ -6,15 +6,24 @@ export const CUSTOMER_EXPORT_COLUMN_IDS = [
   'displayName',
   'phone',
   'customerCode',
-  'balanceRial',
+  'categoryName',
   'tags',
   'creditScore',
-  'overdueCount',
+  'linkStatus',
+  'balanceRial',
   'lastPurchaseAt',
+  'primaryCity',
+  'overdueCount',
   'createdAt',
 ] as const;
 
 export type CustomerExportColumnId = (typeof CUSTOMER_EXPORT_COLUMN_IDS)[number];
+
+const LINK_STATUS_LABELS: Record<TenantCustomerListItem['linkStatus'], string> = {
+  active: 'فعال',
+  archived: 'بایگانی',
+  blacklisted: 'لیست سیاه',
+};
 
 export const CUSTOMER_EXPORT_COLUMNS: ExportColumnDef<TenantCustomerListItem>[] = [
   {
@@ -34,9 +43,37 @@ export const CUSTOMER_EXPORT_COLUMNS: ExportColumnDef<TenantCustomerListItem>[] 
   {
     id: 'customerCode',
     header: 'کد مشتری',
-    headerEn: 'Customer code',
+    headerEn: 'Local code',
     width: 14,
     accessor: (row) => row.localCode ?? '—',
+  },
+  {
+    id: 'categoryName',
+    header: 'دسته‌بندی',
+    headerEn: 'Category',
+    width: 16,
+    accessor: (row) => row.categoryName ?? '—',
+  },
+  {
+    id: 'tags',
+    header: 'برچسب‌ها',
+    headerEn: 'Tags',
+    width: 18,
+    accessor: (row) => row.tags.join(', '),
+  },
+  {
+    id: 'creditScore',
+    header: 'امتیاز اعتبار',
+    headerEn: 'Credit score',
+    width: 12,
+    accessor: (row) => row.creditScore,
+  },
+  {
+    id: 'linkStatus',
+    header: 'وضعیت',
+    headerEn: 'Status',
+    width: 12,
+    accessor: (row) => LINK_STATUS_LABELS[row.linkStatus] ?? row.linkStatus,
   },
   {
     id: 'balanceRial',
@@ -55,18 +92,18 @@ export const CUSTOMER_EXPORT_COLUMNS: ExportColumnDef<TenantCustomerListItem>[] 
     accessor: (row) => formatRialRaw(row.totalPurchaseRial),
   },
   {
-    id: 'tags',
-    header: 'برچسب‌ها',
-    headerEn: 'Tags',
-    width: 18,
-    accessor: (row) => row.tags.join(', '),
+    id: 'lastPurchaseAt',
+    header: 'آخرین خرید',
+    headerEn: 'Last purchase',
+    width: 16,
+    accessor: (row) => (row.lastPurchaseAt ? row.lastPurchaseAt.toISOString().slice(0, 10) : '—'),
   },
   {
-    id: 'creditScore',
-    header: 'امتیاز اعتبار',
-    headerEn: 'Credit score',
-    width: 12,
-    accessor: (row) => row.creditScore,
+    id: 'primaryCity',
+    header: 'شهر',
+    headerEn: 'Primary city',
+    width: 14,
+    accessor: (row) => row.primaryAddressCity ?? '—',
   },
   {
     id: 'overdueCount',
@@ -74,13 +111,6 @@ export const CUSTOMER_EXPORT_COLUMNS: ExportColumnDef<TenantCustomerListItem>[] 
     headerEn: 'Overdue count',
     width: 12,
     accessor: (row) => row.overdueCount,
-  },
-  {
-    id: 'lastPurchaseAt',
-    header: 'آخرین خرید',
-    headerEn: 'Last purchase',
-    width: 16,
-    accessor: (row) => (row.lastPurchaseAt ? row.lastPurchaseAt.toISOString().slice(0, 10) : '—'),
   },
   {
     id: 'createdAt',
@@ -91,13 +121,27 @@ export const CUSTOMER_EXPORT_COLUMNS: ExportColumnDef<TenantCustomerListItem>[] 
   },
 ];
 
+/** IFP-042 default export columns (enterprise list fields). */
+export const CUSTOMER_EXPORT_DEFAULT_COLUMN_IDS: CustomerExportColumnId[] = [
+  'displayName',
+  'phone',
+  'customerCode',
+  'categoryName',
+  'tags',
+  'creditScore',
+  'linkStatus',
+  'balanceRial',
+  'lastPurchaseAt',
+  'primaryCity',
+];
+
 export function resolveCustomerExportColumns(
   requested?: string[],
 ): ExportColumnDef<TenantCustomerListItem>[] {
   const allowed = new Map(CUSTOMER_EXPORT_COLUMNS.map((column) => [column.id, column]));
 
   if (!requested?.length) {
-    return CUSTOMER_EXPORT_COLUMNS.filter((column) => column.id !== 'balanceRialRaw');
+    return CUSTOMER_EXPORT_DEFAULT_COLUMN_IDS.map((id) => allowed.get(id)!);
   }
 
   const resolved: ExportColumnDef<TenantCustomerListItem>[] = [];

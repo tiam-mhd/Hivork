@@ -6,29 +6,20 @@ import {
   assertCustomerImportFileSize,
   assertCustomerImportXlsxFormat,
   CUSTOMER_IMPORT_MAX_FILE_BYTES,
+  CUSTOMER_IMPORT_TEMPLATE_HEADERS,
   parseCustomerImportExcel,
 } from './customer-import.parser.js';
 
 async function buildCustomerImportWorkbook(
-  rows: Array<{
-    phone?: string | null;
-    name?: string | null;
-    local_code?: string | null;
-    notes?: string | null;
-  }>,
-  headers: string[] = ['phone', 'name', 'local_code', 'notes'],
+  rows: Array<Record<string, string | null | undefined>>,
+  headers: string[] = [...CUSTOMER_IMPORT_TEMPLATE_HEADERS],
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Customers');
   sheet.addRow(headers);
 
   for (const row of rows) {
-    sheet.addRow([
-      row.phone ?? '',
-      row.name ?? '',
-      row.local_code ?? '',
-      row.notes ?? '',
-    ]);
+    sheet.addRow(headers.map((header) => row[header] ?? ''));
   }
 
   const arrayBuffer = await workbook.xlsx.writeBuffer();
@@ -36,43 +27,65 @@ async function buildCustomerImportWorkbook(
 }
 
 describe('parseCustomerImportExcel', () => {
-  it('parses valid rows with optional columns', async () => {
+  it('parses enterprise columns', async () => {
     const buffer = await buildCustomerImportWorkbook([
-      { phone: '09121234567', name: 'حسین احمدی', local_code: 'C-001', notes: 'VIP' },
-      { phone: '09351234567', name: 'مریم رضایی' },
+      {
+        phone: '09121234567',
+        name: 'حسین احمدی',
+        local_code: 'C-001',
+        email: 'a@example.com',
+        national_id: '1234567890',
+        category: 'vip',
+        tags: 'vip,gold',
+        address_line: 'خیابان ۱',
+        city: 'تهران',
+        phone2: '09129876543',
+        emergency_name: 'مریم',
+        emergency_phone: '09121112222',
+        notes: 'VIP',
+      },
     ]);
 
     const result = await parseCustomerImportExcel(buffer);
 
-    expect(result.rows).toHaveLength(2);
+    expect(result.rows).toHaveLength(1);
     expect(result.rows[0]).toMatchObject({
       rowNumber: 2,
       phone: '09121234567',
       name: 'حسین احمدی',
       localCode: 'C-001',
+      email: 'a@example.com',
+      nationalId: '1234567890',
+      category: 'vip',
+      tags: 'vip,gold',
+      addressLine: 'خیابان ۱',
+      city: 'تهران',
+      phone2: '09129876543',
+      emergencyName: 'مریم',
+      emergencyPhone: '09121112222',
       notes: 'VIP',
     });
   });
 
-  it('accepts case-insensitive headers', async () => {
+  it('accepts legacy template with core columns only', async () => {
     const buffer = await buildCustomerImportWorkbook(
       [{ phone: '09121234567', name: 'Ali' }],
-      ['Phone', 'Name', 'Local_Code'],
+      ['phone', 'name', 'local_code', 'notes'],
     );
 
     const result = await parseCustomerImportExcel(buffer);
     expect(result.rows[0]?.localCode).toBeNull();
   });
 
-  it('rejects missing required headers', async () => {
+  it('rejects missing required headers with INVALID_TEMPLATE', async () => {
     const buffer = await buildCustomerImportWorkbook(
       [{ phone: '09121234567', name: 'Ali' }],
       ['phone'],
     );
 
     await expect(parseCustomerImportExcel(buffer)).rejects.toMatchObject({
-      code: 'VALIDATION_ERROR',
-      httpStatus: 400,
+      code: 'INVALID_TEMPLATE',
+      httpStatus: 422,
     });
   });
 
@@ -94,8 +107,15 @@ describe('assertCustomerImportFileSize', () => {
   it('rejects files larger than 5MB', () => {
     const oversized = Buffer.alloc(CUSTOMER_IMPORT_MAX_FILE_BYTES + 1, 0x50);
 
-    expect(() => assertCustomerImportFileSize(oversized)).toThrow(ApplicationError);
-    expect(() => assertCustomerImportFileSize(oversized)).toThrow(/5MB/);
+    try {
+      assertCustomerImportFileSize(oversized);
+      expect.unreachable('expected FILE_TOO_LARGE');
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: 'FILE_TOO_LARGE',
+        httpStatus: 413,
+      });
+    }
   });
 });
 

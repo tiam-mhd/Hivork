@@ -164,4 +164,16 @@ describe('UpdateInstallmentSettingsUseCase', () => {
       }),
     ).rejects.toMatchObject({ code: 'SETTING_KEY_UNKNOWN', httpStatus: 400 });
   });
+
+  it('rejects read-only contract_number_next_sequence patch', async () => {
+    await expect(
+      useCase.execute({
+        tenantId: 'tenant-1',
+        actorId: 'staff-1',
+        patch: { contract_number_next_sequence: 99 } as never,
+      }),
+    ).rejects.toMatchObject({ code: 'READONLY_SETTING_KEY', httpStatus: 400 });
+
+    expect(unitOfWork.transaction).not.toHaveBeenCalled();
+  });
 });

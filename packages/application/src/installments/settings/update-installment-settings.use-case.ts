@@ -1,5 +1,6 @@
 import {
   type InstallmentsSettingsDto,
+  READONLY_INSTALLMENTS_SETTING_KEYS,
   UpdateInstallmentsSettingsSchema,
   type UpdateInstallmentsSettingsDto,
 } from '@hivork/contracts';
@@ -23,6 +24,19 @@ export type UpdateInstallmentSettingsInput = {
 };
 
 const INSTALLMENTS_MODULE = 'installments';
+
+function assertPatchKeysAllowed(patch: UpdateInstallmentsSettingsDto): void {
+  for (const key of READONLY_INSTALLMENTS_SETTING_KEYS) {
+    if (key in patch) {
+      throw new ApplicationError(
+        'READONLY_SETTING_KEY',
+        `Setting key "${key}" is read-only and cannot be patched.`,
+        400,
+        { key },
+      );
+    }
+  }
+}
 
 function parseUpdatePatch(patch: UpdateInstallmentsSettingsDto): UpdateInstallmentsSettingsDto {
   const result = UpdateInstallmentsSettingsSchema.safeParse(patch);
@@ -53,6 +67,7 @@ export class UpdateInstallmentSettingsUseCase
   ) {}
 
   async execute(input: UpdateInstallmentSettingsInput): Promise<GetInstallmentSettingsOutput> {
+    assertPatchKeysAllowed(input.patch);
     const parsed = parseUpdatePatch(input.patch);
     const keys = Object.keys(parsed) as (keyof InstallmentsSettingsDto)[];
 

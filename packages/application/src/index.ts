@@ -390,12 +390,37 @@ export {
   type ITenantCustomerRepository,
   type TenantCustomerRecord,
   type TenantCustomerDetailRecord,
+  type TenantCustomerDetailWithRelationsRecord,
+  type TenantCustomerStatus,
+  type PreferredContactChannel,
+  type ICustomerAddressRepository,
+  type CustomerAddressRecord,
+  type CreateCustomerAddressesInput,
+  type SyncCustomerAddressesInput,
+  type SyncCustomerAddressItem,
+  type ListCustomerAddressesOptions,
+  type ICustomerEmergencyContactRepository,
+  type CustomerEmergencyContactRecord,
+  type CreateCustomerEmergencyContactsInput,
+  type SyncCustomerEmergencyContactsInput,
+  type SyncCustomerEmergencyContactItem,
+  type ListCustomerEmergencyContactsOptions,
+  type ICustomerContactPhoneRepository,
+  type CustomerContactPhoneRecord,
+  type CreateCustomerContactPhonesInput,
+  type SyncCustomerContactPhonesInput,
+  type SyncCustomerContactPhoneItem,
+  type ListCustomerContactPhonesOptions,
+  type UpsertCustomerContactPhonesInput,
+  type ICustomerCategoryReader,
+  type CustomerCategoryLookupResult,
   type DeletedTenantCustomerRecord,
   type CreateTenantCustomerLinkInput,
   type RestoreTenantCustomerLinkInput,
   type UpdateTenantCustomerLinkInput,
   type TenantCustomerListItem,
   type TenantCustomerListSort,
+  type TenantCustomerListLinkStatusFilter,
   type TenantCustomerListScope,
   type TenantCustomerFullDetail,
   type TenantCustomerGlobalProfile,
@@ -477,11 +502,174 @@ export {
   type UpdateTenantCustomerOutput,
 } from './customers/update-tenant-customer.use-case.js';
 export {
+  SoftDeleteTenantCustomerUseCase,
+  type SoftDeleteTenantCustomerInput,
+  type SoftDeleteTenantCustomerOutput,
+} from './customers/soft-delete-tenant-customer.use-case.js';
+export {
+  MergeTenantCustomersUseCase,
+  type MergeTenantCustomersInput,
+  type MergeTenantCustomersOutput,
+} from './customers/merge-tenant-customers.use-case.js';
+export {
+  TransferCustomerOwnershipUseCase,
+  type TransferCustomerOwnershipInput,
+  type TransferCustomerOwnershipOutput,
+} from './customers/transfer-customer-ownership.use-case.js';
+export {
+  AdjustCustomerScoreUseCase,
+  type AdjustCustomerScoreInput,
+  type AdjustCustomerScoreOutput,
+} from './customers/adjust-customer-score.use-case.js';
+export {
+  BlacklistTenantCustomerUseCase,
+  UnblacklistTenantCustomerUseCase,
+  type BlacklistTenantCustomerInput,
+  type BlacklistTenantCustomerOutput,
+  type UnblacklistTenantCustomerInput,
+  type UnblacklistTenantCustomerOutput,
+} from './customers/blacklist-tenant-customer.use-case.js';
+export { CustomerScoringHandler } from './customers/event-handlers/customer-scoring.handler.js';
+export {
+  OUTBOX_EVENT_HANDLERS,
+  SYSTEM_STAFF_ACTOR_ID,
+  type IOutboxEventHandler,
+  type OutboxEventDispatchRecord,
+} from './ports/outbox-event-handler.port.js';
+export {
+  RestoreTenantCustomerUseCase,
+  type RestoreTenantCustomerInput,
+  type RestoreTenantCustomerOutput,
+} from './customers/restore-tenant-customer.use-case.js';
+export {
+  ArchiveTenantCustomerUseCase,
+  UnarchiveTenantCustomerUseCase,
+  type ArchiveTenantCustomerInput,
+  type ArchiveTenantCustomerOutput,
+  type UnarchiveTenantCustomerInput,
+  type UnarchiveTenantCustomerOutput,
+} from './customers/archive-tenant-customer.use-case.js';
+export {
+  BulkTagCustomersUseCase,
+  type BulkTagCustomersInput,
+  type BulkTagCustomersOutput,
+} from './customers/bulk-tag-customers.use-case.js';
+export {
+  BulkUntagCustomersUseCase,
+  type BulkUntagCustomersInput,
+  type BulkUntagCustomersOutput,
+} from './customers/bulk-untag-customers.use-case.js';
+export {
   GetTenantCustomerUseCase,
   type GetTenantCustomerInput,
   type GetTenantCustomerOutput,
   type TenantCustomerInclude,
 } from './customers/get-tenant-customer.use-case.js';
+export {
+  GetCustomerTimelineUseCase,
+  type GetCustomerTimelineInput,
+  type GetCustomerTimelineOutput,
+} from './customers/get-customer-timeline.use-case.js';
+export {
+  ListCustomerPaymentsUseCase,
+  type ListCustomerPaymentsInput,
+  type ListCustomerPaymentsOutput,
+} from './customers/list-customer-payments.use-case.js';
+export {
+  ListCustomerContractsUseCase,
+  type ListCustomerContractsInput,
+  type ListCustomerContractsOutput,
+} from './customers/list-customer-contracts.use-case.js';
+export {
+  UploadCustomerDocumentUseCase,
+  type UploadCustomerDocumentInput,
+  type UploadCustomerDocumentOutput,
+} from './customers/upload-customer-document.use-case.js';
+export {
+  ListCustomerDocumentsUseCase,
+  type ListCustomerDocumentsInput,
+  type ListCustomerDocumentsOutput,
+} from './customers/list-customer-documents.use-case.js';
+export {
+  DeleteCustomerDocumentUseCase,
+  type DeleteCustomerDocumentInput,
+  type DeleteCustomerDocumentOutput,
+} from './customers/delete-customer-document.use-case.js';
+export {
+  GetCustomerDocumentDownloadUseCase,
+  type GetCustomerDocumentDownloadInput,
+  type GetCustomerDocumentDownloadOutput,
+} from './customers/get-customer-document-download.use-case.js';
+export {
+  CreateCustomerNoteUseCase,
+  ListCustomerNotesUseCase,
+  UpdateCustomerNoteUseCase,
+  DeleteCustomerNoteUseCase,
+  type CreateCustomerNoteCommand,
+  type CreateCustomerNoteOutput,
+  type ListCustomerNotesInput,
+  type ListCustomerNotesOutput,
+  type UpdateCustomerNoteCommand,
+  type UpdateCustomerNoteOutput,
+  type DeleteCustomerNoteInput,
+  type DeleteCustomerNoteOutput,
+} from './customers/customer-notes.use-case.js';
+export {
+  CUSTOMER_NOTE_REPOSITORY,
+  type ICustomerNoteRepository,
+  type CustomerNoteRecord,
+  type CustomerNoteRecordWithAuthor,
+  type CreateCustomerNoteInput,
+  type UpdateCustomerNoteInput,
+  type ListCustomerNotesOptions,
+} from './ports/customer-note.repository.port.js';
+export {
+  CUSTOMER_DOCUMENT_ABSOLUTE_MAX_BYTES,
+  ALLOWED_CUSTOMER_DOCUMENT_MIMES,
+  buildCustomerDocumentStorageKey,
+} from './customers/customer-document.constants.js';
+export {
+  FILE_STORAGE_PORT,
+  FILE_SIGNED_DOWNLOAD_TTL_SECONDS,
+  type IFileStoragePort,
+  type UploadFileInput,
+} from './ports/file-storage.port.js';
+export {
+  FILE_VIRUS_SCAN_PORT,
+  type IFileVirusScanPort,
+  type FileVirusScanInput,
+} from './ports/file-virus-scan.port.js';
+export {
+  CUSTOMER_DOCUMENT_REPOSITORY,
+  type ICustomerDocumentRepository,
+  type CustomerDocumentRecord,
+  type CustomerDocumentType,
+  type CreateCustomerDocumentInput,
+  type ListCustomerDocumentsOptions,
+} from './ports/customer-document.repository.port.js';
+export {
+  type CustomerTimelineEventRecord,
+  type CustomerTimelineEventType,
+  type CustomerTimelineScopeFilter,
+  type ICustomerTimelineRepository,
+  type ListCustomerTimelineOptions,
+} from './ports/customer-timeline.repository.port.js';
+export {
+  type CustomerPaymentListRecord,
+  type CustomerPaymentScopeFilter,
+  type CustomerPaymentStatus,
+  type CustomerPaymentSummaryRecord,
+  type ICustomerPaymentsRepository,
+  type ListCustomerPaymentsOptions,
+  type SummarizeCustomerPaymentsOptions,
+} from './ports/customer-payments.repository.port.js';
+export {
+  type CustomerContractListRecord,
+  type CustomerContractScopeFilter,
+  type CustomerContractStatus,
+  type ICustomerContractsRepository,
+  type ListCustomerContractsOptions,
+} from './ports/customer-contracts.repository.port.js';
 export {
   ImportCustomersExcelUseCase,
   type ImportCustomersExcelInput,
@@ -576,10 +764,16 @@ export {
   ExportTenantCustomersUseCase,
   DEFAULT_EXPORT_MAX_ROWS,
   buildExportFilename,
+  buildLegacyExportFilename,
   hashExportPayload,
   type ExportTenantCustomersInput,
   type ExportTenantCustomersOutput,
 } from './customers/export-tenant-customers.use-case.js';
+export {
+  ExportCustomersUseCase,
+  type ExportCustomersInput,
+  type ExportCustomersOutput,
+} from './customers/export-customers.use-case.js';
 export {
   DEFAULT_PDF_MAX_ROWS,
   prepareCustomerListExport,
@@ -612,12 +806,22 @@ export {
 export {
   CUSTOMER_EXPORT_COLUMN_IDS,
   CUSTOMER_EXPORT_COLUMNS,
+  CUSTOMER_EXPORT_DEFAULT_COLUMN_IDS,
   resolveCustomerExportColumns,
 } from './customers/customer-export.columns.js';
 export {
+  EXPORT_RATE_LIMIT_PER_HOUR,
   EXPORT_RATE_LIMIT_PER_MINUTE,
   type IExportRateLimiterPort,
 } from './ports/export-rate-limiter.port.js';
+export {
+  CUSTOMER_XLSX_EXPORT_WRITER,
+  CUSTOMER_PDF_EXPORT_WRITER,
+  type ICustomerXlsxExportWriter,
+  type ICustomerPdfExportWriter,
+  type CustomerXlsxExportParams,
+  type CustomerPdfExportParams,
+} from './ports/customer-export-writer.port.js';
 export type {
   IStaffSavedFilterRepository,
   StaffSavedFilterRecord,
@@ -721,12 +925,19 @@ export {
 export {
   CUSTOMER_IMPORT_MAX_FILE_BYTES,
   CUSTOMER_IMPORT_MAX_ROWS,
+  CUSTOMER_IMPORT_TEMPLATE_VERSION,
+  CUSTOMER_IMPORT_TEMPLATE_HEADERS,
   parseCustomerImportExcel,
   assertCustomerImportFileSize,
   assertCustomerImportXlsxFormat,
   type CustomerImportParsedRow,
   type CustomerImportParseResult,
 } from './customers/excel/customer-import.parser.js';
+export {
+  buildCustomerImportTemplateBuffer,
+  buildCustomerImportTemplateWorkbook,
+} from './customers/excel/customer-import-template.generator.js';
+export { buildCustomerImportErrorReportBuffer } from './customers/excel/customer-import-error-report.js';
 export { hashCustomerImportFile } from './customers/excel/customer-import-file-hash.js';
 export {
   GetDashboardReportUseCase,
@@ -769,6 +980,121 @@ export {
   type CancelSaleResult,
 } from './installments/sales/cancel-sale.use-case.js';
 export {
+  ExtendContractUseCase,
+  type ExtendContractInput,
+} from './installments/sales/extend-contract.use-case.js';
+export {
+  CopyContractUseCase,
+  type CopyContractInput,
+  type CopyContractResult,
+} from './installments/sales/copy-contract.use-case.js';
+export {
+  TerminateContractUseCase,
+  type TerminateContractInput,
+} from './installments/sales/terminate-contract.use-case.js';
+export {
+  CloseContractUseCase,
+  type CloseContractInput,
+} from './installments/sales/close-contract.use-case.js';
+export {
+  ArchiveContractUseCase,
+  type ArchiveContractInput,
+} from './installments/sales/archive-contract.use-case.js';
+export {
+  UnarchiveContractUseCase,
+  type UnarchiveContractInput,
+} from './installments/sales/unarchive-contract.use-case.js';
+export {
+  SoftDeleteSaleUseCase,
+  type SoftDeleteSaleInput,
+  type SoftDeleteSaleResult,
+} from './installments/sales/soft-delete-sale.use-case.js';
+export {
+  RestoreSaleUseCase,
+  type RestoreSaleInput,
+} from './installments/sales/restore-sale.use-case.js';
+export {
+  GetSaleEnterpriseUseCase,
+  type GetSaleEnterpriseInput,
+  type GetSaleEnterpriseOutput,
+} from './installments/sales/get-sale-enterprise.use-case.js';
+export {
+  ChangeSaleStatusUseCase,
+  type ChangeSaleStatusInput,
+} from './installments/sales/change-sale-status.use-case.js';
+export {
+  ListContractVersionsUseCase,
+  GetContractVersionUseCase,
+  type ListContractVersionsInput,
+  type GetContractVersionInput,
+  type ContractVersionDto,
+  type ContractVersionDetailDto,
+} from './installments/sales/contract-version.use-cases.js';
+export {
+  CreateContractAttachmentUseCase,
+  ListContractAttachmentsUseCase,
+  SoftDeleteContractAttachmentUseCase,
+  type CreateSaleContractAttachmentInput,
+  type ListSaleContractAttachmentsInput,
+  type SoftDeleteSaleContractAttachmentInput,
+  type ContractAttachmentDto,
+} from './installments/sales/contract-attachment.use-cases.js';
+export {
+  ListContractGuarantorsUseCase,
+  CreateContractGuarantorUseCase,
+  UpdateContractGuarantorUseCase,
+  SoftDeleteContractGuarantorUseCase,
+  RestoreContractGuarantorUseCase,
+  type ListContractGuarantorsInput,
+  type CreateContractGuarantorCommandInput,
+  type UpdateContractGuarantorCommandInput,
+  type SoftDeleteContractGuarantorCommandInput,
+  type RestoreContractGuarantorCommandInput,
+  type ContractGuarantorDto,
+} from './installments/sales/contract-guarantor.use-cases.js';
+export {
+  ListContractCollateralsUseCase,
+  CreateContractCollateralUseCase,
+  UpdateContractCollateralUseCase,
+  SoftDeleteContractCollateralUseCase,
+  ReleaseContractCollateralUseCase,
+  ForfeitContractCollateralUseCase,
+  type ListContractCollateralsInput,
+  type CreateContractCollateralCommandInput,
+  type UpdateContractCollateralCommandInput,
+  type SoftDeleteContractCollateralCommandInput,
+  type ReleaseContractCollateralCommandInput,
+  type ForfeitContractCollateralCommandInput,
+  type ContractCollateralDto,
+} from './installments/sales/contract-collateral.use-cases.js';
+export {
+  ListSaleLineItemsUseCase,
+  CreateSaleLineItemUseCase,
+  BulkUpsertSaleLineItemsUseCase,
+  UpdateSaleLineItemUseCase,
+  SoftDeleteSaleLineItemUseCase,
+  type SaleEnterpriseWithLineItems,
+  type ListSaleLineItemsInput,
+  type CreateSaleLineItemCommandInput,
+  type BulkUpsertSaleLineItemsInput,
+  type UpdateSaleLineItemCommandInput,
+  type SoftDeleteSaleLineItemInput,
+} from './installments/sales/sale-line-item.use-cases.js';
+export {
+  UpdateSaleFinancialsUseCase,
+  RecalculateSaleFinancialsUseCase,
+  type UpdateSaleFinancialsInput,
+  type RecalculateSaleFinancialsInput,
+  type RecalculateSaleFinancialsResult,
+} from './installments/sales/recalculate-sale-financials.use-case.js';
+export {
+  ENTERPRISE_STATUS_TO_PRISMA,
+  type EnterpriseSaleStatusDto,
+} from './installments/sales/contract-api.mapper.js';
+export {
+  type SaleDetailEnterprise,
+} from './installments/sales/sale-enterprise.mapper.js';
+export {
   ListSalesUseCase,
   type ListSalesInput,
   type ListSalesOutput,
@@ -804,6 +1130,11 @@ export {
 } from './installments/settings/update-installment-settings.use-case.js';
 export { mergeInstallmentsSettings } from './installments/settings/merge-installments-settings.js';
 export {
+  CONTRACT_NUMBER_SEQUENCE_KEY,
+  TENANT_SEQUENCE_REPOSITORY,
+  type ITenantSequenceRepository,
+} from './ports/tenant-sequence.repository.port.js';
+export {
   GetSecuritySettingsUseCase,
   assertValidIpv4CidrEntries,
   type GetSecuritySettingsInput,
@@ -837,6 +1168,7 @@ export {
   type SaleRecord,
   type SaveSalePersistenceInput,
   type UpdateSalePersistenceInput,
+  type UpdateSaleFinancialsPersistenceInput,
   type SaleCustomerEmbed,
   type SaleListItem,
   type SaleDetailRecord,
@@ -848,6 +1180,7 @@ export {
   type IInstallmentRepository,
   type InstallmentRecord,
   type SaveInstallmentPersistenceInput,
+  type RegenerateInstallmentScheduleInput,
   type InstallmentListItem,
   type InstallmentListSort,
   type InstallmentCursorPosition,
@@ -862,8 +1195,68 @@ export {
   type CustomerImportIdempotencyCachedRecord,
   CUSTOMER_IMPORT_IDEMPOTENCY_STORE,
   CUSTOMER_IMPORT_IDEMPOTENCY_TTL_SECONDS,
+  type ICustomerMergeIdempotencyStore,
+  type CustomerMergeIdempotencyResult,
+  type CustomerMergeIdempotencyCachedRecord,
+  CUSTOMER_MERGE_IDEMPOTENCY_STORE,
+  CUSTOMER_MERGE_IDEMPOTENCY_TTL_SECONDS,
+  type ITenantCustomerMergeRepository,
+  type ReassignCustomerRelatedRecordsInput,
+  type ReassignCustomerRelatedRecordsResult,
+  TENANT_CUSTOMER_MERGE_REPOSITORY,
   type IUnitOfWork,
   UNIT_OF_WORK,
+  type IContractVersionRepository,
+  type ContractVersionRecord,
+  type ContractVersionSnapshot,
+  type ContractVersionChangeType,
+  type AppendContractVersionInput,
+  type ExtendSalePersistenceInput,
+  type TerminateSalePersistenceInput,
+  type CloseSalePersistenceInput,
+  type ArchiveSalePersistenceInput,
+  type UnarchiveSalePersistenceInput,
+  CONTRACT_NUMBER_ALLOCATOR,
+  type IContractNumberAllocator,
+  SALE_COPY_RELATED_REPOSITORY,
+  type ISaleCopyRelatedRepository,
+  type SaleCopyLineItemRecord,
+  type SaleCopyGuarantorRecord,
+  INSTALLMENT_SCHEDULE_EXTENDER,
+  type ExtendInstallmentScheduleInput,
+  type IInstallmentScheduleExtender,
+  INSTALLMENT_CLOSE_WAIVER,
+  type IInstallmentCloseWaiver,
+  type WaiveRemainingOnCloseInput,
+  type IContractAttachmentRepository,
+  type ContractAttachmentRecord,
+  type ContractAttachmentType,
+  type CreateContractAttachmentInput,
+  type ListContractAttachmentsOptions,
+  CONTRACT_ATTACHMENT_REPOSITORY,
+  type IContractGuarantorRepository,
+  type ContractGuarantorRecord,
+  type GuarantorRelationship,
+  type CreateContractGuarantorInput,
+  type UpdateContractGuarantorInput,
+  type ListContractGuarantorsOptions,
+  CONTRACT_GUARANTOR_REPOSITORY,
+  type IContractCollateralRepository,
+  type ContractCollateralRecord,
+  type CollateralType,
+  type CollateralStatus,
+  type CreateContractCollateralInput,
+  type UpdateContractCollateralInput,
+  type UpdateContractCollateralStatusInput,
+  type ListContractCollateralsOptions,
+  CONTRACT_COLLATERAL_REPOSITORY,
+  type ISaleLineItemRepository,
+  type SaleLineItemRecord,
+  type CreateSaleLineItemInput,
+  type UpdateSaleLineItemInput,
+  type ReplaceSaleLineItemsInput,
+  type ListSaleLineItemsOptions,
+  SALE_LINE_ITEM_REPOSITORY,
 } from './ports/index.js';
 export {
   GetCurrentTenantUseCase,
@@ -925,9 +1318,24 @@ export {
   encodeStaffSecurityAuditCursor,
   decodeStaffSecurityAuditCursor,
 } from './audit/staff-security-audit-cursor.js';
-export type {
-  IStaffSecurityAuditRepository,
+export type { IStaffSecurityAuditRepository,
   StaffSecurityAuditListItem,
   ListStaffSecurityAuditOptions,
   ListStaffSecurityAuditResult,
 } from './audit/ports/staff-security-audit.repository.port.js';
+export type { IRealtimePublisher } from './ports/realtime-publisher.port.js';
+export type { IRealtimeConnectionRegistry } from './ports/realtime-connection-registry.port.js';
+export type { IRealtimeUnreadCounter } from './ports/realtime-unread-counter.port.js';
+export {
+  PublishRealtimeEventUseCase,
+  type PublishRealtimeEventInput,
+} from './realtime/publish-realtime-event.use-case.js';
+export {
+  GetNotificationUnreadCountUseCase,
+  type GetNotificationUnreadCountInput,
+} from './realtime/get-notification-unread-count.use-case.js';
+export {
+  MarkNotificationsReadUseCase,
+  type MarkNotificationsReadInput,
+} from './realtime/mark-notifications-read.use-case.js';
+export { computeRealtimeBackoffMs } from './realtime/realtime-backoff.js';

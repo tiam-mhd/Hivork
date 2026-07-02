@@ -2,6 +2,7 @@ import { ApplicationError } from '../../errors/application.error.js';
 import { UseCase } from '../../core/use-case.js';
 import type { ISaleRepository } from '../../ports/sale.repository.port.js';
 import type { DataScopeStaffContext } from '../../rbac/build-data-scope-filter.js';
+import { ENTERPRISE_STATUS_TO_PRISMA, type EnterpriseSaleStatusDto } from './contract-api.mapper.js';
 import { decodeSaleCursor, encodeSaleCursor, type SaleListSort } from './sale-cursor.js';
 import { resolveSaleListScope } from './sale-data-scope.js';
 import { mapSaleListItemToSummary, type SaleSummary } from './sale-summary.mapper.js';
@@ -13,12 +14,15 @@ export type ListSalesInput = {
   cursor?: string;
   limit: number;
   sort: SaleListSort;
-  status?: 'active' | 'completed' | 'cancelled';
-  statuses?: Array<'active' | 'completed' | 'cancelled'>;
+  status?: EnterpriseSaleStatusDto;
+  statuses?: EnterpriseSaleStatusDto[];
   branchId?: string;
   search?: string;
   from?: Date;
   to?: Date;
+  includeArchived?: boolean;
+  includeDeleted?: boolean;
+  contractNumber?: string;
   activeBranchId?: string;
 };
 
@@ -30,11 +34,7 @@ export type ListSalesOutput = {
   };
 };
 
-const STATUS_TO_PRISMA = {
-  active: 'ACTIVE',
-  completed: 'COMPLETED',
-  cancelled: 'CANCELLED',
-} as const;
+const STATUS_TO_PRISMA = ENTERPRISE_STATUS_TO_PRISMA;
 
 export class ListSalesUseCase implements UseCase<ListSalesInput, ListSalesOutput> {
   constructor(private readonly sales: ISaleRepository) {}
@@ -75,6 +75,9 @@ export class ListSalesUseCase implements UseCase<ListSalesInput, ListSalesOutput
       search: input.search?.trim() || undefined,
       from: input.from,
       to: input.to,
+      includeArchived: input.includeArchived,
+      includeDeleted: input.includeDeleted,
+      contractNumber: input.contractNumber,
     });
 
     const lastItem = result.items[result.items.length - 1];
