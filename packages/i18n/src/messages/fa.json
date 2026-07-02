@@ -1,0 +1,44 @@
+{
+  "common": {
+    "save": "ذخیره",
+    "cancel": "انصراف",
+    "confirm": "تأیید",
+    "select": "انتخاب",
+    "from": "از",
+    "to": "تا",
+    "value": "مقدار",
+    "yes": "بله",
+    "no": "خیر"
+  },
+  "dataTable": {
+    "empty": "موردی یافت نشد",
+    "error": "خطا در بارگذاری داده‌ها",
+    "retry": "تلاش مجدد"
+  },
+  "datePicker": {
+    "placeholder": "انتخاب تاریخ",
+    "fromLabel": "از تاریخ",
+    "toLabel": "تا تاریخ",
+    "invalidDate": "تاریخ نامعتبر است",
+    "rangeInvalid": "تاریخ پایان باید بعد از تاریخ شروع باشد",
+    "helpJalali": "تاریخ به تقویم شمسی",
+    "helpGregorian": "تاریخ به تقویم میلادی"
+  },
+  "calendar": {
+    "jalali": "شمسی",
+    "gregorian": "میلادی",
+    "year": "سال",
+    "month": "ماه",
+    "day": "روز"
+  },
+  "locale": {
+    "fa": "فارسی",
+    "en": "English",
+    "switchLabel": "تغییر زبان"
+  },
+  "filter": {
+    "valueLabel": "مقدار",
+    "fromValue": "مقدار از",
+    "toValue": "مقدار تا"
+  }
+}

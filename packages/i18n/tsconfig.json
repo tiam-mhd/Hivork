@@ -4,8 +4,9 @@
     "rootDir": "src",
     "outDir": "dist",
     "module": "NodeNext",
-    "moduleResolution": "NodeNext"
+    "moduleResolution": "NodeNext",
+    "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.json"],
   "exclude": ["node_modules", "dist", "src/**/*.spec.ts"]
 }

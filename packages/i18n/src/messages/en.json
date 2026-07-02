@@ -1,0 +1,44 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "select": "Select",
+    "from": "From",
+    "to": "To",
+    "value": "Value",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "dataTable": {
+    "empty": "No results found",
+    "error": "Failed to load data",
+    "retry": "Retry"
+  },
+  "datePicker": {
+    "placeholder": "Select date",
+    "fromLabel": "From date",
+    "toLabel": "To date",
+    "invalidDate": "Invalid date",
+    "rangeInvalid": "End date must be on or after start date",
+    "helpJalali": "Jalali (Persian) calendar",
+    "helpGregorian": "Gregorian calendar"
+  },
+  "calendar": {
+    "jalali": "Jalali",
+    "gregorian": "Gregorian",
+    "year": "Year",
+    "month": "Month",
+    "day": "Day"
+  },
+  "locale": {
+    "fa": "فارسی",
+    "en": "English",
+    "switchLabel": "Change language"
+  },
+  "filter": {
+    "valueLabel": "Value",
+    "fromValue": "From value",
+    "toValue": "To value"
+  }
+}
