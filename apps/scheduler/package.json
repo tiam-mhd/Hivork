@@ -12,6 +12,7 @@
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
+    "@hivork/application": "workspace:*",
     "@hivork/infrastructure": "workspace:*",
     "@nestjs/bullmq": "^10.2.3",
     "@nestjs/common": "^10.4.20",
