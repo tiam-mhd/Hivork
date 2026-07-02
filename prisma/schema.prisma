@@ -220,12 +220,24 @@ model Tenant {
   plan            Plan             @relation(fields: [planId], references: [id], onDelete: Restrict)
   branches        Branch[]
   staff           Staff[]
-  tenantCustomers TenantCustomer[]
+  tenantCustomers    TenantCustomer[]
+  customerCategories CustomerCategory[]
+  customerAddresses  CustomerAddress[]
+  customerEmergencyContacts CustomerEmergencyContact[]
+  customerContactPhones CustomerContactPhone[]
+  customerDocuments  CustomerDocument[]
+  customerNotes      CustomerNote[]
   settings        TenantSetting[]
   subscriptions   Subscription[]
   sales           Sale[]
+  contractVersions ContractVersion[]
+  contractAttachments ContractAttachment[]
+  contractGuarantors ContractGuarantor[]
+  contractCollaterals ContractCollateral[]
+  saleLineItems       SaleLineItem[]
   installments    Installment[]
   paymentAttempts PaymentAttempt[]
+  notificationLogs NotificationLog[]
   idempotencyRecords IdempotencyRecord[]
   staffSessions      StaffSession[]
   apiKeys            TenantApiKey[]
@@ -346,12 +358,21 @@ model Staff {
   permissionOverrides UserPermissionOverride[]
   salesCreated        Sale[] @relation("SaleCreatedBy")
   salesCancelled      Sale[] @relation("SaleCancelledBy")
+  salesSigned         Sale[] @relation("SaleSignedBy")
+  salesTerminated     Sale[] @relation("SaleTerminatedBy")
+  salesClosed         Sale[] @relation("SaleClosedBy")
+  salesArchived       Sale[] @relation("SaleArchivedBy")
   installmentsConfirmed Installment[] @relation("InstallmentConfirmedBy")
   installmentsWaived    Installment[] @relation("InstallmentWaivedBy")
   paymentsConfirmed     PaymentAttempt[] @relation("PaymentConfirmedBy")
   staffSessions         StaffSession[]
   savedFilters          StaffSavedFilter[]
   savedViews            StaffSavedView[]
+  assignedCustomers     TenantCustomer[] @relation("TenantCustomerAssignedStaff")
+  blacklistedCustomers  TenantCustomer[] @relation("TenantCustomerBlacklistedBy")
+  archivedCustomers     TenantCustomer[] @relation("TenantCustomerArchivedBy")
+  uploadedCustomerDocuments CustomerDocument[] @relation("CustomerDocumentUploadedBy")
+  authoredCustomerNotes CustomerNote[] @relation("CustomerNoteAuthor")
 
   @@unique([tenantId, userId])
   @@index([tenantId])
@@ -579,11 +600,75 @@ model BotIdentity {
 }
 
 // TASK-023 — TenantCustomer (tenant ↔ global customer link)
+// IFP-033 — extended enterprise fields (category, archive, blacklist, addresses)
+
+enum TenantCustomerStatus {
+  active
+  archived
+  blacklisted
+}
+
+enum CustomerAddressLabel {
+  home
+  work
+  billing
+  other
+}
+
+enum EmergencyContactRelation {
+  parent
+  spouse
+  sibling
+  other
+}
+
+enum CustomerContactPhoneLabel {
+  mobile
+  home
+  work
+  other
+}
+
+model CustomerCategory {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  name         String    @db.VarChar(120)
+  slug         String    @db.VarChar(80)
+  color        String?   @db.VarChar(7)
+  sortOrder    Int       @default(0) @map("sort_order")
+  isDefault    Boolean   @default(false) @map("is_default")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById  String?   @map("created_by_id") @db.Uuid
+  updatedById  String?   @map("updated_by_id") @db.Uuid
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById  String?   @map("deleted_by_id") @db.Uuid
+  deleteReason String?   @map("delete_reason")
+  version      Int       @default(1)
+  metadata     Json?     @db.JsonB
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customers TenantCustomer[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([tenantId, deletedAt])
+  @@map("customer_categories")
+}
 
 model TenantCustomer {
   id                      String                   @id @default(uuid()) @db.Uuid
   tenantId                String                   @map("tenant_id") @db.Uuid
   globalCustomerId        String                   @map("global_customer_id") @db.Uuid
+  categoryId              String?                  @map("category_id") @db.Uuid
+  status                  TenantCustomerStatus     @default(active)
+  isBlacklisted           Boolean                  @default(false) @map("is_blacklisted")
+  blacklistReason         String?                  @map("blacklist_reason")
+  blacklistedAt           DateTime?                @map("blacklisted_at") @db.Timestamptz
+  blacklistedById         String?                  @map("blacklisted_by_id") @db.Uuid
+  archivedAt              DateTime?                @map("archived_at") @db.Timestamptz
+  archivedById            String?                  @map("archived_by_id") @db.Uuid
+  assignedStaffId         String?                  @map("assigned_staff_id") @db.Uuid
   localCode               String?                  @map("local_code")
   tags                    String[]                 @default([])
   notes                   String?
@@ -605,17 +690,193 @@ model TenantCustomer {
   version                 Int                      @default(1)
   metadata                Json?                    @db.JsonB
 
-  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  globalCustomer GlobalCustomer @relation(fields: [globalCustomerId], references: [id], onDelete: Restrict)
-  defaultBranch  Branch?        @relation(fields: [defaultBranchId], references: [id], onDelete: SetNull)
-  sales          Sale[]
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  globalCustomer    GlobalCustomer    @relation(fields: [globalCustomerId], references: [id], onDelete: Restrict)
+  category          CustomerCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  defaultBranch     Branch?           @relation(fields: [defaultBranchId], references: [id], onDelete: SetNull)
+  assignedStaff     Staff?            @relation("TenantCustomerAssignedStaff", fields: [assignedStaffId], references: [id], onDelete: Restrict)
+  blacklistedBy     Staff?            @relation("TenantCustomerBlacklistedBy", fields: [blacklistedById], references: [id], onDelete: Restrict)
+  archivedBy        Staff?            @relation("TenantCustomerArchivedBy", fields: [archivedById], references: [id], onDelete: Restrict)
+  addresses         CustomerAddress[]
+  emergencyContacts CustomerEmergencyContact[]
+  contactPhones     CustomerContactPhone[]
+  documents         CustomerDocument[]
+  customerNotes     CustomerNote[]
+  sales             Sale[]
+  contractGuarantors ContractGuarantor[]
 
   @@unique([tenantId, globalCustomerId])
   @@index([tenantId])
   @@index([tenantId, deletedAt])
   @@index([tenantId, localCode])
   @@index([tenantId, defaultBranchId])
+  @@index([tenantId, status])
+  @@index([tenantId, categoryId])
+  @@index([tenantId, isBlacklisted])
   @@map("tenant_customers")
+}
+
+model CustomerAddress {
+  id               String               @id @default(uuid()) @db.Uuid
+  tenantId         String               @map("tenant_id") @db.Uuid
+  tenantCustomerId String               @map("tenant_customer_id") @db.Uuid
+  label            CustomerAddressLabel @default(home)
+  line1            String               @map("line1")
+  line2            String?              @map("line2")
+  city             String?
+  province         String?
+  postalCode       String?              @map("postal_code") @db.VarChar(10)
+  isPrimary        Boolean              @default(false) @map("is_primary")
+  latitude         Decimal?             @db.Decimal(10, 7)
+  longitude        Decimal?             @db.Decimal(10, 7)
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+  createdById      String?              @map("created_by_id") @db.Uuid
+  updatedById      String?              @map("updated_by_id") @db.Uuid
+  deletedAt        DateTime?            @map("deleted_at") @db.Timestamptz
+  deletedById      String?              @map("deleted_by_id") @db.Uuid
+  deleteReason     String?              @map("delete_reason")
+  version          Int                  @default(1)
+  metadata         Json?                @db.JsonB
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenantCustomer TenantCustomer @relation(fields: [tenantCustomerId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, deletedAt])
+  @@index([tenantCustomerId])
+  @@index([tenantCustomerId, isPrimary])
+  @@map("customer_addresses")
+}
+
+model CustomerEmergencyContact {
+  id               String                   @id @default(uuid()) @db.Uuid
+  tenantId         String                   @map("tenant_id") @db.Uuid
+  tenantCustomerId String                   @map("tenant_customer_id") @db.Uuid
+  name             String                   @db.VarChar(120)
+  phone            String                   @db.VarChar(11)
+  relation         EmergencyContactRelation @default(other)
+  isPrimary        Boolean                  @default(false) @map("is_primary")
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  createdById      String?                  @map("created_by_id") @db.Uuid
+  updatedById      String?                  @map("updated_by_id") @db.Uuid
+  deletedAt        DateTime?                @map("deleted_at") @db.Timestamptz
+  deletedById      String?                  @map("deleted_by_id") @db.Uuid
+  deleteReason     String?                  @map("delete_reason")
+  version          Int                      @default(1)
+  metadata         Json?                    @db.JsonB
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenantCustomer TenantCustomer @relation(fields: [tenantCustomerId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, deletedAt])
+  @@index([tenantCustomerId])
+  @@index([tenantCustomerId, isPrimary])
+  @@map("customer_emergency_contacts")
+}
+
+// IFP-035 — Secondary contact phones (tenant-scoped; primary remains on User)
+
+model CustomerContactPhone {
+  id                  String                    @id @default(uuid()) @db.Uuid
+  tenantId            String                    @map("tenant_id") @db.Uuid
+  tenantCustomerId    String                    @map("tenant_customer_id") @db.Uuid
+  phone               String                    @db.VarChar(11)
+  label               CustomerContactPhoneLabel @default(mobile)
+  isWhatsApp          Boolean                   @default(false) @map("is_whatsapp")
+  isPrimarySecondary  Boolean                   @default(false) @map("is_primary_secondary")
+  isVerified          Boolean                   @default(false) @map("is_verified")
+  notes               String?
+  createdAt           DateTime                  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime                  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById         String?                   @map("created_by_id") @db.Uuid
+  updatedById         String?                   @map("updated_by_id") @db.Uuid
+  deletedAt           DateTime?                 @map("deleted_at") @db.Timestamptz
+  deletedById         String?                   @map("deleted_by_id") @db.Uuid
+  deleteReason        String?                   @map("delete_reason")
+  version             Int                       @default(1)
+  metadata            Json?                     @db.JsonB
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenantCustomer TenantCustomer @relation(fields: [tenantCustomerId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, deletedAt])
+  @@index([tenantCustomerId])
+  @@index([tenantId, phone])
+  @@map("customer_contact_phones")
+}
+
+// IFP-034 — Customer documents (gallery) and structured staff notes
+
+enum CustomerDocumentType {
+  national_id
+  birth_certificate
+  contract
+  photo
+  other
+}
+
+model CustomerDocument {
+  id               String               @id @default(uuid()) @db.Uuid
+  tenantId         String               @map("tenant_id") @db.Uuid
+  tenantCustomerId String               @map("tenant_customer_id") @db.Uuid
+  documentType     CustomerDocumentType @map("document_type")
+  fileStorageKey   String               @map("file_storage_key") @db.VarChar(512)
+  originalFileName String               @map("original_file_name") @db.VarChar(255)
+  mimeType         String               @map("mime_type") @db.VarChar(120)
+  sizeBytes        BigInt               @map("size_bytes")
+  uploadedById     String               @map("uploaded_by_id") @db.Uuid
+  description      String?
+  expiresAt        DateTime?            @map("expires_at") @db.Timestamptz
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz
+  createdById      String?              @map("created_by_id") @db.Uuid
+  updatedById      String?              @map("updated_by_id") @db.Uuid
+  deletedAt        DateTime?            @map("deleted_at") @db.Timestamptz
+  deletedById      String?              @map("deleted_by_id") @db.Uuid
+  deleteReason     String?              @map("delete_reason")
+  version          Int                  @default(1)
+  metadata         Json?                @db.JsonB
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenantCustomer TenantCustomer @relation(fields: [tenantCustomerId], references: [id], onDelete: Restrict)
+  uploadedBy     Staff          @relation("CustomerDocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, deletedAt])
+  @@index([tenantId, tenantCustomerId])
+  @@index([tenantId, documentType])
+  @@map("customer_documents")
+}
+
+model CustomerNote {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  tenantCustomerId String    @map("tenant_customer_id") @db.Uuid
+  body             String    @db.Text
+  isPinned         Boolean   @default(false) @map("is_pinned")
+  authorStaffId    String    @map("author_staff_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById      String?   @map("created_by_id") @db.Uuid
+  updatedById      String?   @map("updated_by_id") @db.Uuid
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById      String?   @map("deleted_by_id") @db.Uuid
+  deleteReason     String?   @map("delete_reason")
+  version          Int       @default(1)
+  metadata         Json?     @db.JsonB
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenantCustomer TenantCustomer @relation(fields: [tenantCustomerId], references: [id], onDelete: Restrict)
+  authorStaff    Staff          @relation("CustomerNoteAuthor", fields: [authorStaffId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([tenantId, deletedAt])
+  @@index([tenantId, tenantCustomerId])
+  @@map("customer_notes")
 }
 
 // TASK-024 — AuditLog (append-only, no soft delete)
@@ -654,54 +915,303 @@ enum SaleStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+  TERMINATED
+  CLOSED
+  ARCHIVED
 
   @@map("sale_status")
 }
 
+enum ContractSignatureStatus {
+  UNSIGNED
+  PENDING
+  SIGNED
+
+  @@map("contract_signature_status")
+}
+
 model Sale {
-  id               String     @id @default(uuid()) @db.Uuid
-  tenantId         String     @map("tenant_id") @db.Uuid
-  branchId         String     @map("branch_id") @db.Uuid
-  tenantCustomerId String     @map("tenant_customer_id") @db.Uuid
-  createdByStaffId String     @map("created_by_staff_id") @db.Uuid
+  id               String                  @id @default(uuid()) @db.Uuid
+  tenantId         String                  @map("tenant_id") @db.Uuid
+  branchId         String                  @map("branch_id") @db.Uuid
+  tenantCustomerId String                  @map("tenant_customer_id") @db.Uuid
+  createdByStaffId String                  @map("created_by_staff_id") @db.Uuid
   title            String?
   description      String?
-  invoiceNumber    String?    @map("invoice_number")
-  totalAmountRial  BigInt     @map("total_amount_rial")
-  downPaymentRial  BigInt     @default(0) @map("down_payment_rial")
-  discountRial     BigInt?    @map("discount_rial")
-  taxRial          BigInt?    @map("tax_rial")
-  installmentCount Int        @map("installment_count")
-  firstDueDate     DateTime   @map("first_due_date") @db.Timestamptz
-  intervalDays     Int        @default(30) @map("interval_days")
-  contractDate     DateTime   @map("contract_date") @db.Date
-  status           SaleStatus @default(ACTIVE)
-  cancelledAt      DateTime?  @map("cancelled_at") @db.Timestamptz
-  cancelledById    String?    @map("cancelled_by_id") @db.Uuid
-  cancelReason     String?    @map("cancel_reason")
-  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz
-  createdById      String?    @map("created_by_id") @db.Uuid
-  updatedById      String?    @map("updated_by_id") @db.Uuid
-  deletedAt        DateTime?  @map("deleted_at") @db.Timestamptz
-  deletedById      String?    @map("deleted_by_id") @db.Uuid
-  deleteReason     String?    @map("delete_reason")
-  version          Int        @default(1)
-  metadata         Json?      @db.JsonB
+  invoiceNumber    String?                 @map("invoice_number")
+  contractNumber   String?                 @map("contract_number")
+  customTerms      String?                 @map("custom_terms") @db.Text
+  signatureStatus  ContractSignatureStatus @default(UNSIGNED) @map("signature_status")
+  signedAt         DateTime?               @map("signed_at") @db.Timestamptz
+  signedByStaffId  String?                 @map("signed_by_staff_id") @db.Uuid
+  extendedFromSaleId String?               @map("extended_from_sale_id") @db.Uuid
+  copiedFromSaleId   String?               @map("copied_from_sale_id") @db.Uuid
+  terminatedAt     DateTime?               @map("terminated_at") @db.Timestamptz
+  terminatedById   String?                 @map("terminated_by_id") @db.Uuid
+  terminateReason  String?                 @map("terminate_reason")
+  closedAt         DateTime?               @map("closed_at") @db.Timestamptz
+  closedById       String?                 @map("closed_by_id") @db.Uuid
+  closeReason      String?                 @map("close_reason")
+  archivedAt       DateTime?               @map("archived_at") @db.Timestamptz
+  archivedById     String?                 @map("archived_by_id") @db.Uuid
+  archiveReason    String?                 @map("archive_reason")
+  insuranceRial    BigInt?                 @map("insurance_rial")
+  insuranceProvider String?                @map("insurance_provider")
+  insurancePolicyNumber String?           @map("insurance_policy_number")
+  insuranceExpiresAt DateTime?           @map("insurance_expires_at") @db.Date
+  totalAmountRial  BigInt                  @map("total_amount_rial")
+  downPaymentRial  BigInt                  @default(0) @map("down_payment_rial")
+  discountRial     BigInt?                 @map("discount_rial")
+  taxRial          BigInt?                 @map("tax_rial")
+  taxRateBps       Int?                    @map("tax_rate_bps")
+  taxInclusive     Boolean                 @default(false) @map("tax_inclusive")
+  installmentCount Int                     @map("installment_count")
+  firstDueDate     DateTime                @map("first_due_date") @db.Timestamptz
+  intervalDays     Int                     @default(30) @map("interval_days")
+  contractDate     DateTime                @map("contract_date") @db.Date
+  status           SaleStatus              @default(ACTIVE)
+  cancelledAt      DateTime?               @map("cancelled_at") @db.Timestamptz
+  cancelledById    String?                 @map("cancelled_by_id") @db.Uuid
+  cancelReason     String?                 @map("cancel_reason")
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+  createdById      String?                 @map("created_by_id") @db.Uuid
+  updatedById      String?                 @map("updated_by_id") @db.Uuid
+  deletedAt        DateTime?               @map("deleted_at") @db.Timestamptz
+  deletedById      String?                 @map("deleted_by_id") @db.Uuid
+  deleteReason     String?                 @map("delete_reason")
+  version          Int                     @default(1)
+  metadata         Json?                   @db.JsonB
 
-  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  branch         Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  tenantCustomer TenantCustomer @relation(fields: [tenantCustomerId], references: [id], onDelete: Restrict)
-  createdByStaff Staff          @relation("SaleCreatedBy", fields: [createdByStaffId], references: [id], onDelete: Restrict)
-  cancelledBy    Staff?         @relation("SaleCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
-  installments   Installment[]
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch           Branch         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  tenantCustomer   TenantCustomer @relation(fields: [tenantCustomerId], references: [id], onDelete: Restrict)
+  createdByStaff   Staff          @relation("SaleCreatedBy", fields: [createdByStaffId], references: [id], onDelete: Restrict)
+  cancelledBy      Staff?         @relation("SaleCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+  signedByStaff    Staff?         @relation("SaleSignedBy", fields: [signedByStaffId], references: [id], onDelete: Restrict)
+  terminatedBy     Staff?         @relation("SaleTerminatedBy", fields: [terminatedById], references: [id], onDelete: Restrict)
+  closedBy         Staff?         @relation("SaleClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
+  archivedBy       Staff?         @relation("SaleArchivedBy", fields: [archivedById], references: [id], onDelete: Restrict)
+  extendedFromSale Sale?          @relation("SaleExtendedFrom", fields: [extendedFromSaleId], references: [id], onDelete: Restrict)
+  extendedSales    Sale[]         @relation("SaleExtendedFrom")
+  copiedFromSale   Sale?          @relation("SaleCopiedFrom", fields: [copiedFromSaleId], references: [id], onDelete: Restrict)
+  copiedSales      Sale[]         @relation("SaleCopiedFrom")
+  installments     Installment[]
+  contractVersions ContractVersion[]
+  contractAttachments ContractAttachment[]
+  contractGuarantors  ContractGuarantor[]
+  contractCollaterals ContractCollateral[]
+  saleLineItems       SaleLineItem[]
 
   @@index([tenantId, status])
   @@index([tenantId, branchId])
   @@index([tenantId, tenantCustomerId])
   @@index([tenantId, createdAt])
   @@index([tenantId, deletedAt])
+  @@index([tenantId, contractNumber])
+  @@index([tenantId, archivedAt])
   @@map("sales")
+}
+
+// IFP-056 — ContractVersion (append-only snapshot history; no soft delete — see SOFT-DELETE-POLICY exception)
+
+enum ContractVersionChangeType {
+  CREATE
+  UPDATE
+  EXTEND
+  COPY_SOURCE
+  TERMINATE
+  CLOSE
+  FINANCIAL_RECALC
+
+  @@map("contract_version_change_type")
+}
+
+model ContractVersion {
+  id            String                    @id @default(uuid()) @db.Uuid
+  tenantId      String                    @map("tenant_id") @db.Uuid
+  saleId        String                    @map("sale_id") @db.Uuid
+  versionNumber Int                       @map("version_number")
+  changeType    ContractVersionChangeType @map("change_type")
+  changeReason  String                    @map("change_reason")
+  snapshot      Json                      @db.JsonB
+  createdAt     DateTime                  @default(now()) @map("created_at") @db.Timestamptz
+  createdById   String?                   @map("created_by_id") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@unique([saleId, versionNumber])
+  @@index([tenantId, saleId])
+  @@index([tenantId, createdAt])
+  @@map("contract_versions")
+}
+
+// IFP-057 — ContractAttachment (soft delete + restore; fileId validated at app layer until File model exists)
+
+enum ContractAttachmentType {
+  CONTRACT_SCAN
+  SIGNED_CONTRACT
+  IDENTITY_DOC
+  COLLATERAL_DOC
+  OTHER
+
+  @@map("contract_attachment_type")
+}
+
+model ContractAttachment {
+  id             String                 @id @default(uuid()) @db.Uuid
+  tenantId       String                 @map("tenant_id") @db.Uuid
+  saleId         String                 @map("sale_id") @db.Uuid
+  fileId         String                 @map("file_id") @db.Uuid
+  attachmentType ContractAttachmentType @map("attachment_type")
+  label          String?
+  description    String?
+  sortOrder      Int                    @default(0) @map("sort_order")
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+  createdById    String?                @map("created_by_id") @db.Uuid
+  updatedById    String?                @map("updated_by_id") @db.Uuid
+  deletedAt      DateTime?              @map("deleted_at") @db.Timestamptz
+  deletedById    String?                @map("deleted_by_id") @db.Uuid
+  deleteReason   String?                @map("delete_reason")
+  version        Int                    @default(1)
+  metadata       Json?                  @db.JsonB
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, saleId])
+  @@index([tenantId, deletedAt])
+  @@map("contract_attachments")
+}
+
+// IFP-065 — ContractGuarantor (linked tenant customer or external person; soft delete)
+
+enum GuarantorRelationship {
+  PARENT
+  SPOUSE
+  SIBLING
+  EMPLOYER
+  OTHER
+
+  @@map("guarantor_relationship")
+}
+
+model ContractGuarantor {
+  id               String                @id @default(uuid()) @db.Uuid
+  tenantId         String                @map("tenant_id") @db.Uuid
+  saleId           String                @map("sale_id") @db.Uuid
+  tenantCustomerId String?               @map("tenant_customer_id") @db.Uuid
+  fullName         String?               @map("full_name")
+  nationalId       String?               @map("national_id")
+  phone            String?
+  relationship     GuarantorRelationship
+  note             String?
+  sortOrder        Int                   @default(0) @map("sort_order")
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+  createdById      String?               @map("created_by_id") @db.Uuid
+  updatedById      String?               @map("updated_by_id") @db.Uuid
+  deletedAt        DateTime?             @map("deleted_at") @db.Timestamptz
+  deletedById      String?               @map("deleted_by_id") @db.Uuid
+  deleteReason     String?               @map("delete_reason")
+  version          Int                   @default(1)
+  metadata         Json?                 @db.JsonB
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sale           Sale            @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  tenantCustomer TenantCustomer? @relation(fields: [tenantCustomerId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, saleId])
+  @@index([tenantId, deletedAt])
+  @@map("contract_guarantors")
+}
+
+// IFP-066 — ContractCollateral (pledged asset with release/forfeit lifecycle; soft delete)
+
+enum CollateralType {
+  CHEQUE
+  PROMISSORY_NOTE
+  GOLD
+  VEHICLE
+  PROPERTY
+  CASH_DEPOSIT
+  OTHER
+
+  @@map("collateral_type")
+}
+
+enum CollateralStatus {
+  PLEDGED
+  RELEASED
+  FORFEITED
+
+  @@map("collateral_status")
+}
+
+model ContractCollateral {
+  id                 String           @id @default(uuid()) @db.Uuid
+  tenantId           String           @map("tenant_id") @db.Uuid
+  saleId             String           @map("sale_id") @db.Uuid
+  collateralType     CollateralType   @map("collateral_type")
+  title              String
+  description        String?
+  estimatedValueRial BigInt           @map("estimated_value_rial")
+  documentFileId     String?          @map("document_file_id") @db.Uuid
+  registrationNumber String?          @map("registration_number")
+  issuedAt           DateTime?        @map("issued_at") @db.Date
+  status             CollateralStatus @default(PLEDGED)
+  sortOrder          Int              @default(0) @map("sort_order")
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  createdById        String?          @map("created_by_id") @db.Uuid
+  updatedById        String?          @map("updated_by_id") @db.Uuid
+  deletedAt          DateTime?        @map("deleted_at") @db.Timestamptz
+  deletedById        String?          @map("deleted_by_id") @db.Uuid
+  deleteReason       String?          @map("delete_reason")
+  version            Int              @default(1)
+  metadata           Json?            @db.JsonB
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, saleId])
+  @@index([tenantId, status])
+  @@index([tenantId, deletedAt])
+  @@map("contract_collaterals")
+}
+
+// IFP-068 — SaleLineItem (contract line items with per-line discount/tax; soft delete)
+
+model SaleLineItem {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  saleId        String    @map("sale_id") @db.Uuid
+  title         String
+  sku           String?
+  quantity      Int       @default(1)
+  unitPriceRial BigInt    @map("unit_price_rial")
+  discountRial  BigInt    @default(0) @map("discount_rial")
+  taxRial       BigInt    @default(0) @map("tax_rial")
+  lineTotalRial BigInt    @map("line_total_rial")
+  sortOrder     Int       @default(0) @map("sort_order")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById   String?   @map("created_by_id") @db.Uuid
+  updatedById   String?   @map("updated_by_id") @db.Uuid
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById   String?   @map("deleted_by_id") @db.Uuid
+  deleteReason  String?   @map("delete_reason")
+  version       Int       @default(1)
+  metadata      Json?     @db.JsonB
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, saleId])
+  @@index([tenantId, deletedAt])
+  @@map("sale_line_items")
 }
 
 // TASK-062 — Installment (append-only — no delete)
@@ -742,6 +1252,7 @@ model Installment {
   confirmedByStaff Staff?  @relation("InstallmentConfirmedBy", fields: [confirmedByStaffId], references: [id], onDelete: Restrict)
   waivedByStaff    Staff?  @relation("InstallmentWaivedBy", fields: [waivedByStaffId], references: [id], onDelete: Restrict)
   paymentAttempts  PaymentAttempt[]
+  notificationLogs NotificationLog[]
 
   @@unique([saleId, sequenceNumber])
   @@index([tenantId, status, dueDate])
@@ -801,6 +1312,35 @@ model PaymentAttempt {
   @@index([tenantId, status, createdAt])
   @@index([tenantId, deletedAt])
   @@map("payment_attempts")
+}
+
+// TASK-130 — NotificationLog (append-only — IFP-046 timeline source)
+
+model NotificationLog {
+  id             String    @id @default(uuid()) @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById    String?   @map("created_by_id") @db.Uuid
+  updatedById    String?   @map("updated_by_id") @db.Uuid
+  version        Int       @default(1)
+  metadata       Json?     @db.JsonB
+  tenantId       String    @map("tenant_id") @db.Uuid
+  installmentId  String?   @map("installment_id") @db.Uuid
+  channel        String
+  reminderType   String?   @map("reminder_type")
+  status         String
+  idempotencyKey String    @unique @map("idempotency_key")
+  recipientRef   String    @map("recipient_ref")
+  externalMsgId  String?   @map("external_message_id")
+  errorCode      String?   @map("error_code")
+  sentAt         DateTime? @map("sent_at") @db.Timestamptz
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  installment Installment? @relation(fields: [installmentId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@index([tenantId, installmentId])
+  @@map("notification_logs")
 }
 
 // TASK-025 — TenantSetting, BranchSetting (module-scoped key-value)

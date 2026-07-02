@@ -9,6 +9,7 @@ import {
 export const SEED_EXTRA_PERMISSION_CODES = [
   'core.customer.restore',
   'core.customer.delete',
+  'core.data.restore',
   'core.recycle.view',
   'core.security.phone.change',
   'core.security.session.view',
