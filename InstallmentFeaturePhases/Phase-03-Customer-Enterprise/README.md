@@ -19,8 +19,8 @@
 - [ ] همه IFP-TASKهای **P0** (033→054) Done
 - [ ] Vertical slice: ثبت مشتری Enterprise → آپلود مدارک → timeline → merge با audit → export Excel
 - [ ] هیچ `prisma.*.delete()` روی business models
-- [ ] Integration test cross-tenant روی merge/list/update → **fail**
-- [ ] E2E merge scenario (IFP-054) pass
+- [ ] Integration test cross-tenant روی merge/list/update → **fail** (`pnpm test:phase-03-customers`)
+- [ ] E2E merge scenario (IFP-054) pass (`pnpm test:phase-03-customers`)
 - [ ] UI مشتری (IFP-053): loading / empty / error / no-permission / partial load
 - [ ] self-review ≥ **95/100** روی همه task specs
 - [ ] TRACEABILITY: ۱۰۰٪ bulletهای §۳ `installment-module-features.md` پوشش داده شده

@@ -479,7 +479,27 @@ Result: { totalRows, successCount, failedCount, errors: [{ row, phone, reason }]
 
 ---
 
-## بخش دوازدهم: محاسبات مالی — مثال‌های کامل / Section 12: Financial Calculation Examples
+## بخش دوازدهم: مالیات و بیمه قرارداد / Section 12: Contract Tax & Insurance (IFP-069)
+
+### BR-048 — تجمیع مالیات header + line
+**فارسی:** `subtotal = Σ lineTotal` (شامل مالیات سطر). مالیات header فقط وقتی `taxInclusive = false`: یا `taxRial` ثابت (اولویت) یا `applyRate(subtotal, taxRateBps)`.  
+**English:** Line totals include per-line tax. Header tax applies only when not tax-inclusive: fixed `taxRial` wins over `taxRateBps`.  
+**خطا / Error:** `TAX_RATE_INVALID` when `taxRateBps` ∉ [0, 10000]
+
+```
+totalAmountRial = subtotal + headerTax + insurance (when included in total)
+taxRial (stored) = Σ lineTax + headerTax
+```
+
+---
+
+### BR-049 — بیمه اختیاری در جمع
+**فارسی:** `insuranceRial` می‌تواند به `totalAmountRial` اضافه شود (پیش‌فرض: بله). تنظیم tenant `insurance_included_in_total = false` → بیمه ثبت می‌شود ولی در جمع کل نیست.  
+**English:** Insurance is an optional add-on to total (default included). Expired insurance sets `insuranceExpiredWarning` on DTO — does not block edits.
+
+---
+
+## بخش سیزدهم: محاسبات مالی — مثال‌های کامل / Section 13: Financial Calculation Examples
 
 ### مثال ۱: فروش ساده
 ```
@@ -603,6 +623,8 @@ console.assert(sum === remaining, 'Sum invariant violated!');
 | BR-045 | Security | customer ≠ staff actor | — |
 | BR-046 | Audit | موارد حساس اجباری | — |
 | BR-047 | Audit | append-only forever | — |
+| BR-048 | Financials | header + line tax aggregation | `TAX_RATE_INVALID` |
+| BR-049 | Financials | insurance add-on in total (setting) | — |
 
 ---
 

@@ -79,6 +79,31 @@ PLAYWRIGHT_SKIP_WEBSERVER=1 pnpm --filter @hivork/web exec playwright test phase
 
 ---
 
+### Phase 04 — Contract Enterprise vertical slice (IFP-078)
+
+| Suite | Path | Runtime |
+|-------|------|---------|
+| Integration (API) | `apps/api/test/integration/phase04-contract-enterprise.spec.ts` | PG + Redis via Testcontainers / CI services |
+| Playwright (Web) | `apps/web/e2e/phase04-contract-e2e.spec.ts` | API + Web + seed |
+| CI steps | `.github/workflows/ci.yml` → quality + `test-phase-01-auth` smoke reuse | after migrate + seed |
+
+**Covered scenarios:** sale financials/line items, guarantor + collateral + attachment metadata, lifecycle (`extend -> terminate -> close -> archive`), contract copy lineage, enterprise settings patch/get, RBAC deny/allow, and cross-tenant isolation.
+
+```bash
+# API integration only
+pnpm --filter @hivork/api test:integration -- test/integration/phase04-contract-enterprise.spec.ts
+
+# Full local gate (integration + Playwright)
+PLAYWRIGHT_SKIP_WEBSERVER=1 pnpm test:phase-04-contract-enterprise
+```
+
+**Notes:**
+- Requires seeded `demo-shop` fixtures plus Redis-backed OTP flow for web login.
+- Settings assertions intentionally verify tenant isolation by comparing tenant A changes against tenant B defaults.
+- Lifecycle smoke archives only after the contract is first moved to a terminal state, matching the enterprise status machine.
+
+---
+
 ## ۳. آستانه پوشش (Coverage Thresholds)
 
 ```json

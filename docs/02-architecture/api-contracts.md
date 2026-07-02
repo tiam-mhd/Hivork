@@ -240,24 +240,82 @@ GET /api/v1/customers?cursor=CURSOR&limit=20&sort=createdAt:desc&status=active&s
 }
 ```
 
-### `GET /api/v1/settings?module=installments`
+### `GET /api/v1/settings/installments`
 
 ```json
 // Response 200
 {
-  "installments": {
-    "reminder_days_before": [3, 1],
-    "reminder_on_due_date": true,
-    "reminder_time": "09:00",
-    "overdue_escalation_days": [1, 3, 7],
-    "default_installment_count": 12,
-    "allow_customer_self_report_payment": true,
-    "require_seller_payment_confirmation": true,
-    "notify_seller_on_customer_payment_report": true,
-    "default_reminder_channels": ["telegram"]
+  "data": {
+    "installments": {
+      "reminder_days_before": [3, 1],
+      "reminder_on_due_date": true,
+      "reminder_time": "09:00",
+      "overdue_escalation_days": [1, 3, 7],
+      "default_installment_count": 12,
+      "allow_customer_self_report_payment": true,
+      "require_seller_payment_confirmation": true,
+      "notify_seller_on_customer_payment_report": true,
+      "default_reminder_channels": ["telegram"],
+      "calculation_formula": "equal_installments",
+      "penalty_type": "none",
+      "penalty_rate_bps": 0,
+      "penalty_fixed_rial": "0",
+      "penalty_grace_days": 0,
+      "interest_rate_bps_annual": 0,
+      "interest_calculation_method": "none",
+      "rounding_mode": "nearest",
+      "rounding_unit_rial": "1000",
+      "skip_holidays_in_schedule": true,
+      "holiday_calendar_source": "merge_official_and_custom",
+      "custom_holiday_dates": [],
+      "calendar_display_mode": "jalali",
+      "calendar_input_mode": "jalali",
+      "contract_numbering_enabled": true,
+      "contract_number_prefix": "CTR",
+      "contract_number_pad_length": 6,
+      "contract_number_include_year": true,
+      "contract_number_next_sequence": 43
+    }
   }
 }
 ```
+
+### `PATCH /api/v1/settings/installments`
+
+```json
+// Request
+{
+  "penalty_type": "percent_daily",
+  "penalty_rate_bps": 50,
+  "penalty_grace_days": 3,
+  "interest_rate_bps_annual": 1800,
+  "interest_calculation_method": "simple",
+  "rounding_mode": "nearest",
+  "rounding_unit_rial": "1000",
+  "calendar_display_mode": "jalali",
+  "contract_number_prefix": "CTR"
+}
+
+// Response 200
+{
+  "data": {
+    "installments": {
+      "penalty_type": "percent_daily",
+      "penalty_rate_bps": 50,
+      "penalty_grace_days": 3,
+      "interest_rate_bps_annual": 1800,
+      "interest_calculation_method": "simple",
+      "rounding_mode": "nearest",
+      "rounding_unit_rial": "1000",
+      "calendar_display_mode": "jalali",
+      "contract_number_prefix": "CTR",
+      "contract_number_next_sequence": 43
+    }
+  }
+}
+```
+
+`contract_number_next_sequence` is read-only: returned in GET/PATCH responses, but rejected in request bodies with `READONLY_SETTING_KEY`.
 
 ---
 
@@ -431,6 +489,69 @@ Headers: Idempotency-Key: uuid
 // 409 SALE_ALREADY_CANCELLED
 // 409 SALE_HAS_PAID_INSTALLMENT
 ```
+
+### Sales enterprise lifecycle (IFP-064)
+
+Branch-scoped mutations require `X-Branch-Id` (or active branch session). Extend requires `X-Sale-Version` (optimistic lock).
+
+| Method | Path | Permission |
+|--------|------|------------|
+| POST | `/api/v1/sales/:id/extend` | `installments.sale.extend` |
+| POST | `/api/v1/sales/:id/copy` | `installments.sale.copy` |
+| POST | `/api/v1/sales/:id/terminate` | `installments.sale.terminate` |
+| POST | `/api/v1/sales/:id/close` | `installments.sale.close` |
+| POST | `/api/v1/sales/:id/archive` | `installments.sale.archive` |
+| POST | `/api/v1/sales/:id/unarchive` | `installments.sale.archive` |
+| POST | `/api/v1/sales/:id/status` | `installments.sale.change_status` |
+| GET | `/api/v1/sales/:id/versions` | `installments.sale.view` |
+| GET | `/api/v1/sales/:id/versions/:versionNumber` | `installments.sale.view` |
+| GET | `/api/v1/sales/:id/attachments` | `installments.sale.view` |
+| POST | `/api/v1/sales/:id/attachments` | `installments.sale.edit` |
+| DELETE | `/api/v1/sales/:id/attachments/:attachmentId` | `installments.sale.edit` |
+| DELETE | `/api/v1/sales/:id` | `installments.sale.edit` |
+| POST | `/api/v1/sales/:id/restore` | `core.data.restore` |
+
+List query extensions: `?includeArchived=true`, `?includeDeleted=true`, `?status=terminated,closed`, `?contractNumber=CTR-2025-000042`.
+
+Common errors: `INVALID_STATUS_TRANSITION` (409), `VERSION_CONFLICT` (409), `SALE_ARCHIVED_READONLY` (409), `SALE_NOT_FOUND` (404), `PERMISSION_DENIED` (403).
+
+### Sales guarantors & collaterals (IFP-067)
+
+Branch-scoped mutations require `X-Branch-Id` (or active branch session).
+
+| Method | Path | Permission |
+|--------|------|------------|
+| GET | `/api/v1/sales/:id/guarantors` | `installments.sale.guarantor.view` |
+| POST | `/api/v1/sales/:id/guarantors` | `installments.sale.guarantor.create` |
+| PATCH | `/api/v1/sales/:id/guarantors/:guarantorId` | `installments.sale.guarantor.update` |
+| DELETE | `/api/v1/sales/:id/guarantors/:guarantorId` | `installments.sale.guarantor.delete` |
+| POST | `/api/v1/sales/:id/guarantors/:guarantorId/restore` | `installments.sale.guarantor.update` |
+| GET | `/api/v1/sales/:id/collaterals` | `installments.sale.collateral.view` |
+| POST | `/api/v1/sales/:id/collaterals` | `installments.sale.collateral.create` |
+| PATCH | `/api/v1/sales/:id/collaterals/:collateralId` | `installments.sale.collateral.update` |
+| DELETE | `/api/v1/sales/:id/collaterals/:collateralId` | `installments.sale.collateral.delete` |
+| POST | `/api/v1/sales/:id/collaterals/:collateralId/release` | `installments.sale.collateral.release` |
+| POST | `/api/v1/sales/:id/collaterals/:collateralId/forfeit` | `installments.sale.collateral.forfeit` |
+
+### Sales financials & line items (IFP-071)
+
+| Method | Path | Permission |
+|--------|------|------------|
+| GET | `/api/v1/sales/:id/line-items` | `installments.sale.edit_financials` |
+| POST | `/api/v1/sales/:id/line-items` | `installments.sale.edit_financials` |
+| PUT | `/api/v1/sales/:id/line-items` | `installments.sale.edit_financials` |
+| PATCH | `/api/v1/sales/:id/line-items/:lineItemId` | `installments.sale.edit_financials` |
+| DELETE | `/api/v1/sales/:id/line-items/:lineItemId` | `installments.sale.edit_financials` |
+| PATCH | `/api/v1/sales/:id/financials` | `installments.sale.edit_financials` |
+| POST | `/api/v1/sales/:id/financials/recalculate` | `installments.sale.edit_financials` |
+
+Bulk upsert and recalculate accept `expectedVersion` (optimistic lock) and optional `regenerateInstallments`. When installment sum ≠ new total and `regenerateInstallments` is false → `409 INSTALLMENT_SUM_MISMATCH`. Recalculate appends `ContractVersion` with `FINANCIAL_RECALC`.
+
+Audit: `sale.line_item.create|update|delete|bulk_upsert`, `sale.financials.update`, `sale.financials.recalculate`.
+
+Common errors: `GUARANTOR_IDENTITY_REQUIRED` (422), `GUARANTOR_LIMIT_EXCEEDED` (409), `COLLATERAL_LIMIT_EXCEEDED` (409), `INVALID_COLLATERAL_STATUS` (409), `SALE_ARCHIVED_READONLY` (409), `SALE_HAS_PAID_INSTALLMENT` (409).
+
+Audit actions: `sale.guarantor.create|update|delete`, `sale.collateral.create|update|delete|release|forfeit`.
 
 ### `GET /api/v1/installments`
 

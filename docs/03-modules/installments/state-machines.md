@@ -113,6 +113,8 @@ Customer report: **همیشه** pending تا confirm (default setting).
 
 ## Sale Status
 
+### Phase 1 (MVP)
+
 ```mermaid
 stateDiagram-v2
     [*] --> active : create sale
@@ -122,24 +124,81 @@ stateDiagram-v2
     cancelled --> [*] : terminal
 ```
 
+### Enterprise (IFP-055 / IFP-059)
+
+```mermaid
+stateDiagram-v2
+    [*] --> active : create sale
+    active --> completed : all installments paid/waived
+    active --> cancelled : cancel (no paid installments)
+    active --> terminated : terminate contract (may retain balance)
+    active --> closed : formal close (settlement or agreement)
+    terminated --> closed : settlement after terminate
+    completed --> archived : archive settled contract
+    closed --> archived : archive closed contract
+    cancelled --> archived : archive cancelled record
+    terminated --> archived : archive terminated record
+
+    note right of archived
+        Read-only terminal in UI
+        unarchive = admin/owner only (IFP-063)
+        Soft delete is separate (SOFT-DELETE-POLICY)
+    end note
+```
+
 ```
     ┌─────────────┐
     │   active    │◄── create
     └──────┬──────┘
            │
-     ┌─────┴─────┐
-     ▼           ▼
-┌───────────┐ ┌───────────┐
-│ completed │ │ cancelled │
-└───────────┘ └───────────┘
+     ┌─────┼─────┬─────────────┐
+     ▼     ▼     ▼             ▼
+┌───────────┐ ┌───────────┐ ┌────────────┐
+│ completed │ │ cancelled │ │ terminated │
+└─────┬─────┘ └─────┬─────┘ └──────┬─────┘
+      │             │              │
+      └──────┬──────┴──────┬───────┘
+             ▼             ▼
+        ┌─────────┐   ┌──────────┐
+        │  closed │   │ archived │
+        └─────────┘   └──────────┘
 ```
 
-| From | To | Trigger |
-|------|-----|---------|
-| `active` | `completed` | all installments paid/waived |
-| `active` | `cancelled` | cancel (no paid installments) |
-| `completed` | * | ممنوع |
-| `cancelled` | * | ممنوع |
+| Status | معنی | List default |
+|--------|------|--------------|
+| `active` | قرارداد جاری | visible |
+| `completed` | همه اقساط تسویه | visible |
+| `cancelled` | لغو قبل از تسویه (MVP) | visible |
+| `terminated` | فسخ قرارداد | visible |
+| `closed` | بستن رسمی | visible |
+| `archived` | آرشیو — read-only | hidden unless `includeArchived` |
+
+| From | To | Trigger | Notes |
+|------|-----|---------|-------|
+| `active` | `completed` | all installments paid/waived | MVP |
+| `active` | `cancelled` | cancel (no paid installments) | MVP |
+| `active` | `terminated` | terminate action | IFP-059 — domain rules |
+| `active` | `closed` | close action | IFP-059 |
+| `completed` | * | — | terminal except `archived` via IFP-059 |
+| `cancelled` | * | — | terminal except `archived` via IFP-059 |
+| `terminated` | `closed` | settlement | IFP-059 |
+| `completed` | `archived` | archive | IFP-059 |
+| `closed` | `archived` | archive | IFP-059 |
+| `cancelled` | `archived` | archive | IFP-059 |
+| `terminated` | `archived` | archive | IFP-059 |
+| `archived` | prior status | unarchive | IFP-063 — admin/owner only |
+| `archived` | * | — | **ممنوع** except unarchive |
+
+> **Soft delete** (`deletedAt`) is orthogonal to lifecycle status — see `SOFT-DELETE-POLICY.md`.
+
+### Contract signature (schema — IFP-055)
+
+| Field | Enum / type | Default |
+|-------|-------------|---------|
+| `signatureStatus` | `UNSIGNED` → `PENDING` → `SIGNED` | `UNSIGNED` |
+| `signedAt`, `signedByStaffId` | nullable | set on sign |
+
+Transition rules for signature → IFP-059 (domain).
 
 ---
 

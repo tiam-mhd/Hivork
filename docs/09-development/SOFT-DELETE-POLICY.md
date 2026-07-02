@@ -42,7 +42,7 @@
 | Rate limit counters | TTL | موقت |
 | JWT blacklist (optional) | TTL | موقت |
 
-**AuditLog، OutboxEvent:** append-only — **هرگز delete** (نه soft نه hard).
+**AuditLog، OutboxEvent، ContractVersion:** append-only — **هرگز delete** (نه soft نه hard). `ContractVersion` = تاریخچه immutable snapshot قرارداد (IFP-056).
 
 ---
 

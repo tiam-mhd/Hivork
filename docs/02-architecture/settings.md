@@ -106,8 +106,150 @@ Effective Setting = Branch override ?? Tenant value ?? Schema default
     values: ['telegram', 'bale', 'sms'],
     default: ['telegram'],
   },
+  // §15 — calculation formula, penalty, interest (IFP-072; schema v1.1.0)
+  calculation_formula: {
+    type: 'enum',
+    values: ['equal_installments', 'declining_balance', 'custom'],
+    default: 'equal_installments',
+    description: 'فرمول محاسبه اقساط — custom reserved for Phase 05',
+  },
+  penalty_type: {
+    type: 'enum',
+    values: ['none', 'fixed_daily', 'percent_daily', 'percent_monthly'],
+    default: 'none',
+  },
+  penalty_rate_bps: {
+    type: 'int',
+    default: 0,
+    min: 0,
+    max: 10000,
+    description: 'نرخ جریمه (basis points) — required when penalty_type is percent_*',
+  },
+  penalty_fixed_rial: {
+    type: 'bigint',
+    default: '0',
+    description: 'مبلغ ثابت روزانه — required when penalty_type is fixed_daily',
+  },
+  penalty_grace_days: {
+    type: 'int',
+    default: 0,
+    min: 0,
+    max: 30,
+  },
+  interest_rate_bps_annual: {
+    type: 'int',
+    default: 0,
+    min: 0,
+    max: 10000,
+    description: 'نرخ سود سالانه (basis points)',
+  },
+  interest_calculation_method: {
+    type: 'enum',
+    values: ['simple', 'none'],
+    default: 'none',
+  },
+  // §15 — rounding + holidays (IFP-073; schema v1.2.0)
+  rounding_mode: {
+    type: 'enum',
+    values: ['none', 'floor', 'ceil', 'nearest'],
+    default: 'nearest',
+    description: 'گرد کردن مبلغ اقساط — none: بدون گرد کردن',
+  },
+  rounding_unit_rial: {
+    type: 'bigint',
+    values: ['1', '10', '100', '1000', '10000'],
+    default: '1000',
+    description: 'واحد گرد کردن (ریال) — ignored when rounding_mode is none',
+  },
+  skip_holidays_in_schedule: {
+    type: 'boolean',
+    default: true,
+    description: 'جابجایی سررسید از روز تعطیل',
+  },
+  holiday_calendar_source: {
+    type: 'enum',
+    values: ['jalali_official', 'custom_only', 'merge_official_and_custom'],
+    default: 'merge_official_and_custom',
+  },
+  custom_holiday_dates: {
+    type: 'date[]',
+    format: 'YYYY-MM-DD',
+    max: 100,
+    default: [],
+    description: 'تعطیلات سفارشی tenant — unique dates',
+  },
+  // §15 — calendar + contract numbering (IFP-074; schema v1.3.0)
+  calendar_display_mode: {
+    type: 'enum',
+    values: ['jalali', 'gregorian', 'both'],
+    default: 'jalali',
+  },
+  calendar_input_mode: {
+    type: 'enum',
+    values: ['jalali', 'gregorian'],
+    default: 'jalali',
+  },
+  contract_numbering_enabled: {
+    type: 'boolean',
+    default: true,
+  },
+  contract_number_prefix: {
+    type: 'string',
+    default: 'CTR',
+    minLength: 1,
+    maxLength: 20,
+  },
+  contract_number_suffix: {
+    type: 'string',
+    optional: true,
+    maxLength: 20,
+  },
+  contract_number_pad_length: {
+    type: 'int',
+    default: 6,
+    min: 4,
+    max: 10,
+  },
+  contract_number_include_year: {
+    type: 'boolean',
+    default: true,
+    description: 'سال جلالی وقتی display = jalali/both؛ سال میلادی وقتی display = gregorian',
+  },
 }
 ```
+
+Rounding behavior (Phase 05 schedule generator):
+
+| Mode | Unit | Example |
+|------|------|---------|
+| `nearest` | 1000 Rial | 1_234_500 → 1_235_000 |
+| `floor` | 1000 Rial | 1_234_500 → 1_234_000 |
+| `ceil` | 1000 Rial | 1_234_500 → 1_235_000 |
+| `none` | any | amount unchanged (unit ignored) |
+
+Holiday merge (`merge_official_and_custom`): union of Iran official Jalali holidays (`OfficialHolidayCalendarProvider` in `@hivork/domain`) + `custom_holiday_dates`.
+
+Contract number format examples:
+
+| Settings | Output |
+|----------|--------|
+| prefix=CTR, year=1404, pad=6, seq=42 | `CTR-1404-000042` |
+| prefix=SH, no year, pad=4, seq=7 | `SH-0007` |
+
+`contract_number_next_sequence` is server-managed and read-only: returned in GET for admin display, excluded from PATCH body, and guarded in application code via `READONLY_INSTALLMENTS_SETTING_KEYS`.
+
+Cross-field validation (Zod `superRefine` in `packages/contracts/src/installments/settings.schema.ts`):
+
+| Condition | Error code |
+|-----------|------------|
+| `penalty_type = fixed_daily` and `penalty_fixed_rial = 0` | `PENALTY_FIXED_REQUIRED` |
+| `penalty_type` starts with `percent` and `penalty_rate_bps = 0` | `PENALTY_RATE_REQUIRED` |
+| `rounding_unit_rial` not in whitelist | `ROUNDING_UNIT_INVALID` |
+| duplicate entry in `custom_holiday_dates` | `DUPLICATE_HOLIDAY_DATES` |
+
+Algorithm consumption (overdue penalty accrual, interest on balance, rounding, holiday skip, contract number allocation) is implemented in later phases — settings only define typed keys and read models here.
+
+Schema version: `1.3.0` (`INSTALLMENTS_SETTINGS_SCHEMA_VERSION` in `@hivork/contracts`).
 
 ---
 
