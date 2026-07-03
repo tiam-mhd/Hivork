@@ -237,7 +237,17 @@ model Tenant {
   saleLineItems       SaleLineItem[]
   installments    Installment[]
   paymentAttempts PaymentAttempt[]
+  paymentReceipts PaymentReceipt[]
+  paymentLedgerEntries PaymentLedgerEntry[]
+  settlementBatches SettlementBatch[]
+  reconciliationReports ReconciliationReport[]
+  reconciliationDiscrepancies ReconciliationDiscrepancy[]
+  checks          Check[]
+  storedFiles     StoredFile[]
+  checkTrackingNotes CheckTrackingNote[]
+  installmentAdjustments InstallmentAdjustment[]
   notificationLogs NotificationLog[]
+  installmentOperationLogs InstallmentOperationLog[]
   idempotencyRecords IdempotencyRecord[]
   staffSessions      StaffSession[]
   apiKeys            TenantApiKey[]
@@ -298,6 +308,9 @@ model Branch {
   tenantCustomers TenantCustomer[]
   settings        BranchSetting[]
   sales           Sale[]
+  paymentLedgerEntries PaymentLedgerEntry[]
+  settlementBatches SettlementBatch[]
+  checks          Check[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -364,7 +377,12 @@ model Staff {
   salesArchived       Sale[] @relation("SaleArchivedBy")
   installmentsConfirmed Installment[] @relation("InstallmentConfirmedBy")
   installmentsWaived    Installment[] @relation("InstallmentWaivedBy")
+  installmentOperationsPerformed InstallmentOperationLog[] @relation("InstallmentOperationPerformedBy")
+  installmentAdjustmentsApplied InstallmentAdjustment[] @relation("InstallmentAdjustmentAppliedBy")
   paymentsConfirmed     PaymentAttempt[] @relation("PaymentConfirmedBy")
+  ledgerEntriesVoided   PaymentLedgerEntry[] @relation("LedgerEntryVoidedBy")
+  settlementBatchesClosed SettlementBatch[] @relation("SettlementBatchClosedBy")
+  reconciliationDiscrepanciesResolved ReconciliationDiscrepancy[] @relation("ReconciliationDiscrepancyResolvedBy")
   staffSessions         StaffSession[]
   savedFilters          StaffSavedFilter[]
   savedViews            StaffSavedView[]
@@ -373,6 +391,7 @@ model Staff {
   archivedCustomers     TenantCustomer[] @relation("TenantCustomerArchivedBy")
   uploadedCustomerDocuments CustomerDocument[] @relation("CustomerDocumentUploadedBy")
   authoredCustomerNotes CustomerNote[] @relation("CustomerNoteAuthor")
+  authoredCheckTrackingNotes CheckTrackingNote[] @relation("CheckTrackingNoteAuthor")
 
   @@unique([tenantId, userId])
   @@index([tenantId])
@@ -1002,6 +1021,9 @@ model Sale {
   contractGuarantors  ContractGuarantor[]
   contractCollaterals ContractCollateral[]
   saleLineItems       SaleLineItem[]
+  installmentOperationLogs InstallmentOperationLog[]
+  paymentLedgerEntries PaymentLedgerEntry[]
+  checks               Check[]
 
   @@index([tenantId, status])
   @@index([tenantId, branchId])
@@ -1252,13 +1274,79 @@ model Installment {
   confirmedByStaff Staff?  @relation("InstallmentConfirmedBy", fields: [confirmedByStaffId], references: [id], onDelete: Restrict)
   waivedByStaff    Staff?  @relation("InstallmentWaivedBy", fields: [waivedByStaffId], references: [id], onDelete: Restrict)
   paymentAttempts  PaymentAttempt[]
+  adjustments      InstallmentAdjustment[]
   notificationLogs NotificationLog[]
+  paymentLedgerEntries PaymentLedgerEntry[]
+  checks               Check[]
 
   @@unique([saleId, sequenceNumber])
   @@index([tenantId, status, dueDate])
   @@index([tenantId, saleId])
   @@index([tenantId, deletedAt])
   @@map("installments")
+}
+
+enum InstallmentAdjustmentType {
+  PENALTY
+  DISCOUNT
+
+  @@map("installment_adjustment_type")
+}
+
+model InstallmentAdjustment {
+  id             String                    @id @default(uuid()) @db.Uuid
+  tenantId       String                    @map("tenant_id") @db.Uuid
+  installmentId  String                    @map("installment_id") @db.Uuid
+  adjustmentType InstallmentAdjustmentType @map("adjustment_type")
+  amountRial     BigInt                    @map("amount_rial")
+  reason         String
+  appliedAt      DateTime                  @default(now()) @map("applied_at") @db.Timestamptz
+  appliedById    String                    @map("applied_by_id") @db.Uuid
+  reversedAt     DateTime?                 @map("reversed_at") @db.Timestamptz
+  createdAt      DateTime                  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime                  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById    String?                   @map("created_by_id") @db.Uuid
+  updatedById    String?                   @map("updated_by_id") @db.Uuid
+  deletedAt      DateTime?                 @map("deleted_at") @db.Timestamptz
+  deletedById    String?                   @map("deleted_by_id") @db.Uuid
+  deleteReason   String?                   @map("delete_reason")
+  version        Int                       @default(1)
+  metadata       Json?                     @db.JsonB
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  installment Installment @relation(fields: [installmentId], references: [id], onDelete: Restrict)
+  appliedBy   Staff       @relation("InstallmentAdjustmentAppliedBy", fields: [appliedById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, installmentId])
+  @@index([tenantId, appliedAt])
+  @@index([tenantId, deletedAt])
+  @@map("installment_adjustments")
+}
+
+// IFP-080 — append-only log for installment advanced operations (reschedule, defer, merge, …)
+
+model InstallmentOperationLog {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  saleId           String   @map("sale_id") @db.Uuid
+  operationType    String   @map("operation_type")
+  installmentIds   String[] @map("installment_ids") @db.Uuid
+  previousSnapshot Json     @map("previous_snapshot")
+  newSnapshot      Json     @map("new_snapshot")
+  reason           String?
+  performedById    String   @map("performed_by_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdById      String?  @map("created_by_id") @db.Uuid
+  version          Int      @default(1)
+  metadata         Json?    @db.JsonB
+
+  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  sale        Sale   @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  performedBy Staff  @relation("InstallmentOperationPerformedBy", fields: [performedById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, saleId])
+  @@index([tenantId, createdAt])
+  @@map("installment_operation_logs")
 }
 
 // TASK-063 — PaymentAttempt (report ≠ confirm — ADR-008)
@@ -1274,6 +1362,7 @@ enum PaymentAttemptStatus {
   PENDING
   CONFIRMED
   REJECTED
+  VOIDED
 
   @@map("payment_attempt_status")
 }
@@ -1305,13 +1394,386 @@ model PaymentAttempt {
 
   installment      Installment @relation(fields: [installmentId], references: [id], onDelete: Restrict)
   tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  confirmedByStaff Staff?      @relation("PaymentConfirmedBy", fields: [confirmedByStaffId], references: [id], onDelete: Restrict)
+  confirmedByStaff Staff?          @relation("PaymentConfirmedBy", fields: [confirmedByStaffId], references: [id], onDelete: Restrict)
+  paymentReceipt   PaymentReceipt?
+  paymentLedgerEntries PaymentLedgerEntry[]
+  checks               Check[]
 
   @@unique([tenantId, idempotencyKey])
   @@index([tenantId, installmentId, status])
   @@index([tenantId, status, createdAt])
   @@index([tenantId, deletedAt])
   @@map("payment_attempts")
+}
+
+// IFP-095 — Payment receipt (soft-delete, one per confirmed attempt)
+
+model PaymentReceipt {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  paymentAttemptId String    @unique @map("payment_attempt_id") @db.Uuid
+  receiptNumber    String    @map("receipt_number")
+  pdfFileId        String?   @map("pdf_file_id") @db.Uuid
+  sentAt           DateTime? @map("sent_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById      String?   @map("created_by_id") @db.Uuid
+  updatedById      String?   @map("updated_by_id") @db.Uuid
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById      String?   @map("deleted_by_id") @db.Uuid
+  deleteReason     String?   @map("delete_reason")
+  version          Int       @default(1)
+  metadata         Json?     @db.JsonB
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  paymentAttempt PaymentAttempt @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, receiptNumber])
+  @@index([tenantId, deletedAt])
+  @@map("payment_receipts")
+}
+
+// IFP-101 — PaymentLedgerEntry (unified tenant financial ledger — append-only, void via reversal)
+
+enum PaymentLedgerEntryType {
+  PAYMENT_IN
+  PAYMENT_OUT
+  REFUND
+  FEE
+  PENALTY
+  DISCOUNT
+  ADJUSTMENT
+  SETTLEMENT
+
+  @@map("payment_ledger_entry_type")
+}
+
+enum PaymentLedgerDirection {
+  CREDIT
+  DEBIT
+
+  @@map("payment_ledger_direction")
+}
+
+enum PaymentLedgerEntryStatus {
+  POSTED
+  VOIDED
+
+  @@map("payment_ledger_entry_status")
+}
+
+model PaymentLedgerEntry {
+  id                String                   @id @default(uuid()) @db.Uuid
+  tenantId          String                   @map("tenant_id") @db.Uuid
+  branchId          String                   @map("branch_id") @db.Uuid
+  entryType         PaymentLedgerEntryType   @map("entry_type")
+  direction         PaymentLedgerDirection
+  amountRial        BigInt                   @map("amount_rial")
+  status            PaymentLedgerEntryStatus @default(POSTED)
+  occurredAt        DateTime                 @map("occurred_at") @db.Timestamptz
+  recordedAt        DateTime                 @default(now()) @map("recorded_at") @db.Timestamptz
+  paymentMethod     String?                  @map("payment_method")
+  description       String?
+  paymentAttemptId  String?                  @map("payment_attempt_id") @db.Uuid
+  installmentId     String?                  @map("installment_id") @db.Uuid
+  saleId            String?                  @map("sale_id") @db.Uuid
+  checkId           String?                  @map("check_id") @db.Uuid
+  settlementBatchId String?                  @map("settlement_batch_id") @db.Uuid
+  reversesEntryId   String?                  @map("reverses_entry_id") @db.Uuid
+  voidedAt          DateTime?                @map("voided_at") @db.Timestamptz
+  voidedById        String?                  @map("voided_by_id") @db.Uuid
+  voidReason        String?                  @map("void_reason")
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz
+  createdById       String?                  @map("created_by_id") @db.Uuid
+  updatedById       String?                  @map("updated_by_id") @db.Uuid
+  deletedAt         DateTime?                @map("deleted_at") @db.Timestamptz
+  deletedById       String?                  @map("deleted_by_id") @db.Uuid
+  deleteReason      String?                  @map("delete_reason")
+  version           Int                      @default(1)
+  metadata          Json?                    @db.JsonB
+
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch         Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  paymentAttempt PaymentAttempt?     @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
+  installment    Installment?        @relation(fields: [installmentId], references: [id], onDelete: Restrict)
+  sale           Sale?               @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  reversesEntry  PaymentLedgerEntry? @relation("LedgerReversal", fields: [reversesEntryId], references: [id], onDelete: Restrict)
+  reversedBy     PaymentLedgerEntry[] @relation("LedgerReversal")
+  settlementBatch SettlementBatch?   @relation(fields: [settlementBatchId], references: [id], onDelete: Restrict)
+  settlementBatchEntry SettlementBatchEntry?
+  reconciliationDiscrepancies ReconciliationDiscrepancy[]
+  check                  Check?              @relation("LedgerEntryCheck", fields: [checkId], references: [id], onDelete: Restrict)
+  linkedFromCheck        Check?              @relation("CheckPrimaryLedgerEntry")
+  voidedBy       Staff?              @relation("LedgerEntryVoidedBy", fields: [voidedById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, occurredAt])
+  @@index([tenantId, status])
+  @@index([tenantId, branchId])
+  @@index([tenantId, paymentAttemptId])
+  @@index([tenantId, installmentId])
+  @@index([tenantId, saleId])
+  @@index([tenantId, deletedAt])
+  @@index([tenantId, settlementBatchId])
+  @@index([tenantId, checkId])
+  @@map("payment_ledger_entries")
+}
+
+enum CheckType {
+  RECEIVED
+  PAYABLE
+
+  @@map("check_type")
+}
+
+enum CheckStatus {
+  REGISTERED
+  DUE
+  COLLECTED
+  BOUNCED
+  TRANSFERRED
+  CANCELLED
+
+  @@map("check_status")
+}
+
+model Check {
+  id               String      @id @default(uuid()) @db.Uuid
+  tenantId         String      @map("tenant_id") @db.Uuid
+  branchId         String      @map("branch_id") @db.Uuid
+  checkType        CheckType   @map("check_type")
+  status           CheckStatus @default(REGISTERED)
+  checkNumber      String      @map("check_number")
+  bankName         String      @map("bank_name")
+  bankBranchCode   String?     @map("bank_branch_code")
+  amountRial       BigInt      @map("amount_rial")
+  dueDate          DateTime    @map("due_date") @db.Timestamptz
+  drawerName       String      @map("drawer_name")
+  payeeName        String?     @map("payee_name")
+  sayadId          String?     @map("sayad_id")
+  paymentAttemptId String?     @map("payment_attempt_id") @db.Uuid
+  ledgerEntryId    String?     @unique @map("ledger_entry_id") @db.Uuid
+  installmentId    String?     @map("installment_id") @db.Uuid
+  saleId           String?     @map("sale_id") @db.Uuid
+  imageFileId      String?     @map("image_file_id") @db.Uuid
+  collectedAt      DateTime?   @map("collected_at") @db.Timestamptz
+  bouncedAt        DateTime?   @map("bounced_at") @db.Timestamptz
+  bounceReason     String?     @map("bounce_reason")
+  transferredTo    String?     @map("transferred_to")
+  transferredAt    DateTime?   @map("transferred_at") @db.Timestamptz
+  trackingNotes    String?     @map("tracking_notes") @db.Text
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+  createdById      String?     @map("created_by_id") @db.Uuid
+  updatedById      String?     @map("updated_by_id") @db.Uuid
+  deletedAt        DateTime?   @map("deleted_at") @db.Timestamptz
+  deletedById      String?     @map("deleted_by_id") @db.Uuid
+  deleteReason     String?     @map("delete_reason")
+  version          Int         @default(1)
+  metadata         Json?       @db.JsonB
+
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch         Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  paymentAttempt PaymentAttempt?   @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
+  ledgerEntry    PaymentLedgerEntry? @relation("CheckPrimaryLedgerEntry", fields: [ledgerEntryId], references: [id], onDelete: Restrict)
+  installment    Installment?      @relation(fields: [installmentId], references: [id], onDelete: Restrict)
+  sale           Sale?             @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  ledgerEntries  PaymentLedgerEntry[] @relation("LedgerEntryCheck")
+  imageFile      StoredFile?       @relation("CheckImageFile", fields: [imageFileId], references: [id], onDelete: Restrict)
+  trackingNoteRecords CheckTrackingNote[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, dueDate])
+  @@index([tenantId, checkNumber, bankName])
+  @@index([tenantId, branchId])
+  @@index([tenantId, deletedAt])
+  @@map("checks")
+}
+
+/// IFP-TASK-116 — StoredFile stub until full FileAsset service (IFP-172+)
+model StoredFile {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  storageKey   String    @unique @map("storage_key") @db.VarChar(512)
+  originalName String    @map("original_name") @db.VarChar(255)
+  mimeType     String    @map("mime_type") @db.VarChar(120)
+  sizeBytes    BigInt    @map("size_bytes")
+  category     String?   @db.VarChar(64)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById  String?   @map("created_by_id") @db.Uuid
+  updatedById  String?   @map("updated_by_id") @db.Uuid
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById  String?   @map("deleted_by_id") @db.Uuid
+  deleteReason String?   @map("delete_reason")
+  version      Int       @default(1)
+  metadata     Json?     @db.JsonB
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  checks Check[] @relation("CheckImageFile")
+
+  @@index([tenantId, deletedAt])
+  @@map("stored_files")
+}
+
+/// IFP-TASK-116 — Staff follow-up notes on a check
+model CheckTrackingNote {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  checkId       String    @map("check_id") @db.Uuid
+  body          String    @db.Text
+  authorStaffId String    @map("author_staff_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  createdById   String?   @map("created_by_id") @db.Uuid
+  updatedById   String?   @map("updated_by_id") @db.Uuid
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById   String?   @map("deleted_by_id") @db.Uuid
+  deleteReason  String?   @map("delete_reason")
+  version       Int       @default(1)
+  metadata      Json?     @db.JsonB
+
+  tenant      Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  check       Check  @relation(fields: [checkId], references: [id], onDelete: Restrict)
+  authorStaff Staff  @relation("CheckTrackingNoteAuthor", fields: [authorStaffId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, checkId])
+  @@index([tenantId, deletedAt])
+  @@map("check_tracking_notes")
+}
+
+enum SettlementBatchStatus {
+  OPEN
+  CLOSED
+
+  @@map("settlement_batch_status")
+}
+
+model SettlementBatch {
+  id              String                @id @default(uuid()) @db.Uuid
+  tenantId        String                @map("tenant_id") @db.Uuid
+  branchId        String                @map("branch_id") @db.Uuid
+  batchNumber     String                @map("batch_number")
+  status          SettlementBatchStatus @default(OPEN)
+  periodFrom      DateTime              @map("period_from") @db.Timestamptz
+  periodTo        DateTime              @map("period_to") @db.Timestamptz
+  totalAmountRial BigInt                @map("total_amount_rial")
+  entryCount      Int                   @map("entry_count")
+  note            String?
+  closedAt        DateTime?             @map("closed_at") @db.Timestamptz
+  closedById      String?               @map("closed_by_id") @db.Uuid
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+  createdById     String?               @map("created_by_id") @db.Uuid
+  updatedById     String?               @map("updated_by_id") @db.Uuid
+  deletedAt       DateTime?             @map("deleted_at") @db.Timestamptz
+  deletedById     String?               @map("deleted_by_id") @db.Uuid
+  deleteReason    String?               @map("delete_reason")
+  version         Int                   @default(1)
+  metadata        Json?                 @db.JsonB
+
+  tenant   Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch   Branch                 @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  closedBy Staff?                 @relation("SettlementBatchClosedBy", fields: [closedById], references: [id], onDelete: Restrict)
+  entries  SettlementBatchEntry[]
+  ledgerEntries PaymentLedgerEntry[]
+  reconciliationReports ReconciliationReport[]
+
+  @@unique([tenantId, batchNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, branchId])
+  @@index([tenantId, deletedAt])
+  @@map("settlement_batches")
+}
+
+model SettlementBatchEntry {
+  id                String   @id @default(uuid()) @db.Uuid
+  settlementBatchId String   @map("settlement_batch_id") @db.Uuid
+  ledgerEntryId     String   @unique @map("ledger_entry_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  settlementBatch SettlementBatch   @relation(fields: [settlementBatchId], references: [id], onDelete: Restrict)
+  ledgerEntry     PaymentLedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict)
+
+  @@index([settlementBatchId])
+  @@map("settlement_batch_entries")
+}
+
+enum ReconciliationDiscrepancyType {
+  MISSING_IN_SYSTEM
+  MISSING_IN_BANK
+  AMOUNT_MISMATCH
+
+  @@map("reconciliation_discrepancy_type")
+}
+
+enum ReconciliationDiscrepancyStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+
+  @@map("reconciliation_discrepancy_status")
+}
+
+model ReconciliationReport {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  settlementBatchId String   @map("settlement_batch_id") @db.Uuid
+  matchedCount      Int      @map("matched_count")
+  discrepancyCount  Int      @map("discrepancy_count")
+  bankTotalRial     BigInt   @map("bank_total_rial")
+  systemTotalRial   BigInt   @map("system_total_rial")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  createdById       String?  @map("created_by_id") @db.Uuid
+  updatedById       String?  @map("updated_by_id") @db.Uuid
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz
+  deletedById       String?  @map("deleted_by_id") @db.Uuid
+  deleteReason      String?  @map("delete_reason")
+  version           Int      @default(1)
+  metadata          Json?    @db.JsonB
+
+  tenant          Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  settlementBatch SettlementBatch            @relation(fields: [settlementBatchId], references: [id], onDelete: Restrict)
+  discrepancies   ReconciliationDiscrepancy[]
+
+  @@index([tenantId, settlementBatchId])
+  @@index([tenantId, deletedAt])
+  @@map("reconciliation_reports")
+}
+
+model ReconciliationDiscrepancy {
+  id                     String                          @id @default(uuid()) @db.Uuid
+  tenantId               String                          @map("tenant_id") @db.Uuid
+  reconciliationReportId String                          @map("reconciliation_report_id") @db.Uuid
+  discrepancyType        ReconciliationDiscrepancyType @map("discrepancy_type")
+  status                 ReconciliationDiscrepancyStatus @default(OPEN)
+  bankReference          String?                         @map("bank_reference")
+  bankAmountRial         BigInt?                         @map("bank_amount_rial")
+  ledgerEntryId          String?                         @map("ledger_entry_id") @db.Uuid
+  systemAmountRial       BigInt?                         @map("system_amount_rial")
+  resolveNote            String?                         @map("resolve_note")
+  resolvedAt             DateTime?                       @map("resolved_at") @db.Timestamptz
+  resolvedById           String?                         @map("resolved_by_id") @db.Uuid
+  createdAt              DateTime                        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime                        @updatedAt @map("updated_at") @db.Timestamptz
+  createdById            String?                         @map("created_by_id") @db.Uuid
+  updatedById            String?                         @map("updated_by_id") @db.Uuid
+  deletedAt              DateTime?                       @map("deleted_at") @db.Timestamptz
+  deletedById            String?                         @map("deleted_by_id") @db.Uuid
+  deleteReason           String?                         @map("delete_reason")
+  version                Int                             @default(1)
+  metadata               Json?                           @db.JsonB
+
+  tenant               Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  reconciliationReport ReconciliationReport @relation(fields: [reconciliationReportId], references: [id], onDelete: Restrict)
+  ledgerEntry          PaymentLedgerEntry?  @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict)
+  resolvedBy           Staff?               @relation("ReconciliationDiscrepancyResolvedBy", fields: [resolvedById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, reconciliationReportId])
+  @@index([tenantId, status])
+  @@index([tenantId, deletedAt])
+  @@map("reconciliation_discrepancies")
 }
 
 // TASK-130 — NotificationLog (append-only — IFP-046 timeline source)
