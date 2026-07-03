@@ -12,8 +12,8 @@ type InstallmentStatusPresentation = {
 const INSTALLMENT_STATUS_PRESENTATION: Record<InstallmentDisplayStatus, InstallmentStatusPresentation> = {
   pending: {
     label: 'در انتظار',
-    className: 'bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:text-amber-300',
-    emoji: '⏳',
+    className: 'bg-blue-100 text-blue-800 ring-blue-200 dark:bg-blue-500/10 dark:text-blue-300',
+    emoji: '🔵',
   },
   paid: {
     label: 'پرداخت‌شده',

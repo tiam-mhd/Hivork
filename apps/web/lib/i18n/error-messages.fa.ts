@@ -94,6 +94,13 @@ export const ERROR_MESSAGES_FA: Record<string, string> = {
   INSTALLMENT_NOT_FOUND: 'قسط یافت نشد.',
   INSTALLMENT_ALREADY_PAID: 'قسط قبلاً پرداخت شده است.',
   INSTALLMENT_STATUS_INVALID: 'تغییر وضعیت قسط در این مرحله مجاز نیست.',
+  INSTALLMENT_NOT_OVERDUE: 'این عملیات فقط برای اقساط معوق مجاز است.',
+  INSTALLMENT_AMOUNT_TOO_LOW: 'مبلغ قسط پس از تخفیف از حداقل مجاز کمتر می‌شود.',
+  VERSION_CONFLICT: 'رکورد توسط کاربر دیگری به‌روزرسانی شده. صفحه را تازه‌سازی کنید.',
+  DISCOUNT_EXCEEDS_AMOUNT: 'مبلغ تخفیف از مبلغ قسط بیشتر است.',
+  DISCOUNT_MAX_EXCEEDED: 'تخفیف از سقف درصد مجاز فراتر رفت.',
+  PENALTY_MAX_EXCEEDED: 'جریمه از سقف مجاز فراتر رفت.',
+  PENALTY_ALREADY_APPLIED_TODAY: 'جریمه خودکار امروز برای این قسط ثبت شده است.',
 
   PAYMENT_NOT_FOUND: 'پرداخت یافت نشد.',
   PAYMENT_ALREADY_CONFIRMED: 'پرداخت قبلاً تأیید شده است.',

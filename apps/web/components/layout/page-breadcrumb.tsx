@@ -44,6 +44,9 @@ function resolveSegmentLabel(segment: string, previousSegment: string | undefine
     if (previousSegment === 'sales') {
       return 'جزئیات فروش';
     }
+    if (previousSegment === 'installments') {
+      return 'جزئیات قسط';
+    }
     if (previousSegment === 'customers') {
       return 'جزئیات مشتری';
     }

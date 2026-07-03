@@ -9,11 +9,22 @@ import {
 
 type InstallmentStatusBadgeProps = {
   installment: InstallmentInSaleDto;
-  saleStatus: SaleDetailDto['status'];
+  saleStatus: SaleDetailDto['status'] | 'closed' | 'archived' | 'terminated';
 };
 
+function normalizeSaleStatusForBadge(
+  saleStatus: InstallmentStatusBadgeProps['saleStatus'],
+): SaleDetailDto['status'] {
+  if (saleStatus === 'closed' || saleStatus === 'archived' || saleStatus === 'terminated') {
+    return 'completed';
+  }
+
+  return saleStatus;
+}
+
 export function InstallmentStatusBadge({ installment, saleStatus }: InstallmentStatusBadgeProps) {
-  const displayStatus = resolveInstallmentDisplayStatus(installment.status, saleStatus);
+  const normalizedSaleStatus = normalizeSaleStatusForBadge(saleStatus);
+  const displayStatus = resolveInstallmentDisplayStatus(installment.status, normalizedSaleStatus);
   const { label, className, emoji, strikethrough } =
     getInstallmentStatusPresentation(displayStatus);
 

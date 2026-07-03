@@ -10,8 +10,10 @@ import type {
 } from '@hivork/contracts/installments';
 import { formatIsoDateAsJalali, formatPersianDigits, formatToman } from '@hivork/i18n';
 import { Button, Card, CardContent } from '@hivork/ui';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
+import { InstallmentStatusBadge } from '@/components/sales/installment-status-badge';
 import {
   fetchSaleAttachments,
   fetchSaleCollaterals,
@@ -377,6 +379,7 @@ export function ContractDetailTabs({ sale, canEdit }: ContractDetailTabsProps) {
                     <th className="px-4 py-3">مبلغ</th>
                     <th className="px-4 py-3">سررسید</th>
                     <th className="px-4 py-3">وضعیت</th>
+                    <th className="px-4 py-3">جزئیات</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -387,7 +390,17 @@ export function ContractDetailTabs({ sale, canEdit }: ContractDetailTabsProps) {
                         <td className="px-4 py-3">{formatPersianDigits(installment.sequenceNumber)}</td>
                         <td className="px-4 py-3">{formatToman(BigInt(installment.amountRial))}</td>
                         <td className="px-4 py-3">{formatIsoDateAsJalali(installment.dueDate.slice(0, 10))}</td>
-                        <td className="px-4 py-3">{installment.status}</td>
+                        <td className="px-4 py-3">
+                          <InstallmentStatusBadge installment={installment} saleStatus={sale.status} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Link
+                            href={`/admin/installments/${installment.id}?saleId=${sale.id}`}
+                            className="text-primary hover:underline"
+                          >
+                            مدیریت
+                          </Link>
+                        </td>
                       </tr>
                     ))}
                 </tbody>
