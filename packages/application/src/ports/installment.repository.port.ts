@@ -1,4 +1,4 @@
-import type { InstallmentStatus } from '@prisma/client';
+import type { InstallmentStatus, SaleStatus } from '@prisma/client';
 
 import type { OutboxTransaction } from './outbox.port.js';
 import type { SaleCustomerEmbed } from './sale.repository.port.js';
@@ -24,6 +24,7 @@ export type InstallmentRecord = {
   waivedByStaffId: string | null;
   waiveReason: string | null;
   version: number;
+  metadata: Record<string, unknown> | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -102,6 +103,103 @@ export type RegenerateInstallmentScheduleInput = {
   updatedById: string;
 };
 
+export type InstallmentSaleContext = {
+  id: string;
+  branchId: string;
+  tenantCustomerId: string;
+  status: SaleStatus;
+  archivedAt: Date | null;
+  createdByStaffId: string;
+};
+
+export type InstallmentWithSaleRecord = {
+  installment: InstallmentRecord;
+  sale: InstallmentSaleContext;
+};
+
+export type RescheduleInstallmentDueDateInput = {
+  tenantId: string;
+  installmentId: string;
+  newDueDate: Date;
+  expectedVersion: number;
+  updatedById: string;
+  status?: InstallmentStatus;
+};
+
+export type RescheduleInstallmentDueDateResult =
+  | { outcome: 'updated'; installment: InstallmentRecord }
+  | { outcome: 'not_found' }
+  | { outcome: 'version_conflict'; currentVersion: number };
+
+export type ApplyInstallmentPaymentInput = {
+  tenantId: string;
+  installmentId: string;
+  expectedVersion: number;
+  status: InstallmentStatus;
+  paidAt: Date | null;
+  confirmedByStaffId: string | null;
+  metadata: Record<string, unknown> | null;
+  updatedById: string;
+};
+
+export type ApplyInstallmentPaymentResult =
+  | { outcome: 'updated'; installment: InstallmentRecord }
+  | { outcome: 'not_found' }
+  | { outcome: 'version_conflict'; currentVersion: number };
+
+export type WaiveInstallmentPersistenceInput = {
+  tenantId: string;
+  installmentId: string;
+  expectedVersion: number;
+  waivedByStaffId: string;
+  waiveReason: string;
+  updatedById: string;
+};
+
+export type WaiveInstallmentPersistenceResult =
+  | { outcome: 'updated'; installment: InstallmentRecord }
+  | { outcome: 'not_found' }
+  | { outcome: 'version_conflict'; currentVersion: number }
+  | { outcome: 'status_invalid'; status: InstallmentStatus };
+
+export type ApplyInstallmentPenaltyInput = {
+  tenantId: string;
+  installmentId: string;
+  penaltyAmountRial: bigint;
+  expectedVersion: number;
+  updatedById: string;
+};
+
+export type ApplyInstallmentPenaltyResult =
+  | { outcome: 'updated'; installment: InstallmentRecord }
+  | { outcome: 'not_found' }
+  | { outcome: 'version_conflict'; currentVersion: number }
+  | { outcome: 'status_invalid'; status: InstallmentStatus };
+
+export type ApplyInstallmentDiscountInput = {
+  tenantId: string;
+  installmentId: string;
+  discountAmountRial: bigint;
+  expectedVersion: number;
+  updatedById: string;
+};
+
+export type ApplyInstallmentDiscountResult =
+  | { outcome: 'updated'; installment: InstallmentRecord }
+  | { outcome: 'not_found' }
+  | { outcome: 'version_conflict'; currentVersion: number }
+  | { outcome: 'status_invalid'; status: InstallmentStatus }
+  | { outcome: 'amount_invalid' };
+
+export type SoftDeleteInstallmentsForRegenerateInput = {
+  tenantId: string;
+  installmentIds: string[];
+  deletedById: string;
+  deleteReason: string;
+};
+
+export type SoftDeleteInstallmentsForMergeInput = SoftDeleteInstallmentsForRegenerateInput;
+
 export interface IInstallmentRepository {
   saveMany(
     inputs: SaveInstallmentPersistenceInput[],
@@ -116,6 +214,55 @@ export interface IInstallmentRepository {
     input: RegenerateInstallmentScheduleInput,
     tx?: OutboxTransaction,
   ): Promise<InstallmentRecord[]>;
+  findByIdWithSale(
+    tenantId: string,
+    installmentId: string,
+    tx?: OutboxTransaction,
+  ): Promise<InstallmentWithSaleRecord | null>;
+  findByIdsForSale(
+    tenantId: string,
+    saleId: string,
+    installmentIds: string[],
+    tx?: OutboxTransaction,
+  ): Promise<InstallmentRecord[]>;
+  rescheduleDueDate(
+    input: RescheduleInstallmentDueDateInput,
+    tx?: OutboxTransaction,
+  ): Promise<RescheduleInstallmentDueDateResult>;
+  applyPaymentConfirm(
+    input: ApplyInstallmentPaymentInput,
+    tx?: OutboxTransaction,
+  ): Promise<ApplyInstallmentPaymentResult>;
+  waive(
+    input: WaiveInstallmentPersistenceInput,
+    tx?: OutboxTransaction,
+  ): Promise<WaiveInstallmentPersistenceResult>;
+  applyPenaltyAmount(
+    input: ApplyInstallmentPenaltyInput,
+    tx?: OutboxTransaction,
+  ): Promise<ApplyInstallmentPenaltyResult>;
+  applyDiscountAmount(
+    input: ApplyInstallmentDiscountInput,
+    tx?: OutboxTransaction,
+  ): Promise<ApplyInstallmentDiscountResult>;
+  syncSaleOutstandingRial(
+    tenantId: string,
+    saleId: string,
+    tx?: OutboxTransaction,
+  ): Promise<bigint>;
+  getMaxSequenceNumber(
+    tenantId: string,
+    saleId: string,
+    tx?: OutboxTransaction,
+  ): Promise<number>;
+  softDeleteForRegenerate(
+    input: SoftDeleteInstallmentsForRegenerateInput,
+    tx?: OutboxTransaction,
+  ): Promise<number>;
+  softDeleteForMerge(
+    input: SoftDeleteInstallmentsForMergeInput,
+    tx?: OutboxTransaction,
+  ): Promise<number>;
   list(tenantId: string, options: ListInstallmentsQueryOptions): Promise<ListInstallmentsResult>;
 }
 

@@ -8,6 +8,7 @@ export type SaleInstallmentDetail = {
   status: 'pending' | 'overdue' | 'paid' | 'waived';
   paidAt?: string | null;
   confirmedBy?: string | null;
+  version: number;
 };
 
 export type SaleDetail = {
@@ -77,6 +78,7 @@ export function mapSaleToDetail(sale: SaleRecord, installments: InstallmentRecor
       status: INSTALLMENT_STATUS_MAP[installment.status] ?? 'pending',
       paidAt: installment.paidAt?.toISOString() ?? null,
       confirmedBy: installment.confirmedByStaffId,
+      version: installment.version,
     })),
   };
 }

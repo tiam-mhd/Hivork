@@ -1,4 +1,4 @@
-export type CustomerPaymentStatus = 'pending' | 'confirmed' | 'rejected';
+export type CustomerPaymentStatus = 'pending' | 'confirmed' | 'rejected' | 'voided';
 
 export type CustomerPaymentScopeFilter =
   | { dataScope: 'all' }

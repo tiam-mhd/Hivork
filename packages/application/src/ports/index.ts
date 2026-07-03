@@ -274,9 +274,67 @@ export {
 } from './contract-number-allocator.port.js';
 export {
   CONTRACT_NUMBER_SEQUENCE_KEY,
+  PAYMENT_RECEIPT_SEQUENCE_KEY,
+  SETTLEMENT_BATCH_SEQUENCE_KEY,
   TENANT_SEQUENCE_REPOSITORY,
   type ITenantSequenceRepository,
 } from './tenant-sequence.repository.port.js';
+export {
+  SETTLEMENT_BATCH_REPOSITORY,
+  type CloseSettlementBatchPersistResult,
+  type FindEligibleSettlementEntriesInput,
+  type ISettlementBatchRepository,
+  type ListSettlementBatchesQuery,
+  type PersistSettlementBatchCloseInput,
+  type PersistSettlementBatchInput,
+  type SettlementBatchDetailRecord,
+  type SettlementBatchListPage,
+  type SettlementBatchRecord,
+  type SettlementBatchLedgerReconciliationEntry,
+} from './settlement-batch.repository.port.js';
+export {
+  RECONCILIATION_REPOSITORY,
+  type IReconciliationRepository,
+  type PersistReconciliationDiscrepancyInput,
+  type PersistReconciliationReportInput,
+  type ReconciliationDiscrepancyRecord,
+  type ReconciliationDiscrepancyStatus,
+  type ReconciliationDiscrepancyType,
+  type ReconciliationReportDetailRecord,
+  type ReconciliationReportRecord,
+  type ResolveReconciliationDiscrepancyInput,
+  type ResolveReconciliationDiscrepancyResult,
+} from './reconciliation.repository.port.js';
+export {
+  CHECK_REPOSITORY,
+  type CheckListPage,
+  type CheckRecord,
+  type CheckStatusValue,
+  type CheckTypeValue,
+  type ICheckRepository,
+  type ListChecksQuery,
+  type PersistCheckInput,
+  type PersistCheckBouncedInput,
+  type PersistCheckBouncedResult,
+  type PersistCheckCollectedInput,
+  type PersistCheckCollectedResult,
+  type PersistCheckTransferredInput,
+  type PersistCheckTransferredResult,
+  type PersistCheckImageUpdateInput,
+  type PersistCheckImageUpdateResult,
+} from './check.repository.port.js';
+export {
+  STORED_FILE_REPOSITORY,
+  type CreateStoredFileInput,
+  type IStoredFileRepository,
+  type StoredFileRecord,
+} from './stored-file.repository.port.js';
+export {
+  CHECK_TRACKING_NOTE_REPOSITORY,
+  type CheckTrackingNoteRecord,
+  type CreateCheckTrackingNoteInput,
+  type ICheckTrackingNoteRepository,
+} from './check-tracking-note.repository.port.js';
 export {
   SALE_COPY_RELATED_REPOSITORY,
   type ISaleCopyRelatedRepository,
@@ -341,8 +399,49 @@ export {
   type InstallmentCursorPosition,
   type ListInstallmentsQueryOptions,
   type ListInstallmentsResult,
+  type InstallmentSaleContext,
+  type InstallmentWithSaleRecord,
+  type RescheduleInstallmentDueDateInput,
+  type RescheduleInstallmentDueDateResult,
+  type ApplyInstallmentPaymentInput,
+  type ApplyInstallmentPaymentResult,
+  type WaiveInstallmentPersistenceInput,
+  type WaiveInstallmentPersistenceResult,
+  type ApplyInstallmentPenaltyInput,
+  type ApplyInstallmentPenaltyResult,
+  type ApplyInstallmentDiscountInput,
+  type ApplyInstallmentDiscountResult,
+  type SoftDeleteInstallmentsForRegenerateInput,
+  type SoftDeleteInstallmentsForMergeInput,
   INSTALLMENT_REPOSITORY,
 } from './installment.repository.port.js';
+export {
+  type IInstallmentAdjustmentRepository,
+  type InstallmentAdjustmentRecord,
+  type CreateInstallmentAdjustmentInput,
+  type InstallmentAdjustmentType,
+  INSTALLMENT_ADJUSTMENT_REPOSITORY,
+} from './installment-adjustment.repository.port.js';
+export {
+  type IInstallmentOperationLogRepository,
+  type InstallmentOperationLogRecord,
+  type AppendInstallmentOperationLogInput,
+  INSTALLMENT_OPERATION_LOG_REPOSITORY,
+} from './installment-operation-log.repository.port.js';
+export {
+  type IPaymentLedgerRepository,
+  type CreatePaymentLedgerEntryInput,
+  type MarkPaymentLedgerEntryVoidedInput,
+  type MarkPaymentLedgerEntryVoidedResult,
+  type PaymentLedgerEntryRecord,
+  type PaymentTransactionListItem,
+  type PaymentTransactionCustomerEmbed,
+  type PaymentTransactionSaleEmbed,
+  type PaymentTransactionInstallmentEmbed,
+  type ListPaymentTransactionsQueryOptions,
+  type ListPaymentTransactionsResult,
+  type ListPaymentTransactionsCursor,
+} from './payment-ledger.repository.port.js';
 export {
   type ISaleIdempotencyStore,
   type SaleIdempotencyCachedRecord,
@@ -373,7 +472,40 @@ export {
   type IPaymentAttemptRepository,
   type PaymentAttemptRecord,
   type CreatePaymentAttemptInput,
+  type UpdatePaymentAttemptMetadataInput,
+  type ConfirmPaymentAttemptInput,
+  type ConfirmPaymentAttemptResult,
+  type RejectPaymentAttemptInput,
+  type RejectPaymentAttemptResult,
+  type VoidPaymentAttemptInput,
+  type VoidPaymentAttemptResult,
+  PAYMENT_ATTEMPT_REPOSITORY,
 } from './payment-attempt.repository.port.js';
+export {
+  type IPaymentReceiptRepository,
+  type PaymentReceiptRecord,
+  type CreatePaymentReceiptInput,
+  PAYMENT_RECEIPT_REPOSITORY,
+} from './payment-receipt.repository.port.js';
+export {
+  type INotificationDispatcher,
+  type QueueReceiptNotificationInput,
+  type QueueReceiptNotificationResult,
+  type ReceiptNotificationChannel,
+  NOTIFICATION_DISPATCHER,
+  RECEIPT_SEND_IDEMPOTENCY_MS,
+  buildReceiptSendIdempotencyKey,
+} from './notification-dispatcher.port.js';
+export {
+  type IPaymentGateway,
+  type IPaymentGatewayRegistry,
+  type CreatePaymentGatewayInput,
+  type CreatePaymentGatewayResult,
+  type RefundPaymentGatewayInput,
+  type RefundPaymentGatewayResult,
+  type VerifiedWebhookPayload,
+  PAYMENT_GATEWAY_REGISTRY,
+} from './payment-gateway.port.js';
 export { type IBranchReader } from './branch.reader.port.js';
 export { type IPermissionRegistry } from './permission.registry.port.js';
 export {
