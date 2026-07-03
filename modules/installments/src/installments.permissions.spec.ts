@@ -8,8 +8,8 @@ import {
 
 const PERMISSION_CODE_REGEX = /^installments(\.[a-z_]+)+$/;
 
-/** Matches `docs/02-architecture/rbac.md` § Installments (26 permissions). */
-const RBAC_INSTALLMENTS_PERMISSION_COUNT = 30;
+/** Matches `docs/02-architecture/rbac.md` § Installments permission catalog length. */
+const RBAC_INSTALLMENTS_PERMISSION_COUNT = 60;
 
 describe('INSTALLMENTS_PERMISSIONS', () => {
   it('lists all installments permissions from rbac.md', () => {
