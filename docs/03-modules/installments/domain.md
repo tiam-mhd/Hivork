@@ -1,7 +1,7 @@
 # ماژول اقساط — Domain Model
 
-> **وضعیت:** Approved — v1.1  
-> **نسخه:** 1.1 — 1405/04/08  
+> **وضعیت:** Approved — v1.2  
+> **نسخه:** 1.2 — 1405/07/03  
 > **ADR مرتبط:** ADR-001, ADR-002, ADR-007, ADR-008, ADR-013, ADR-015  
 > **مراجع:**
 > - قوانین کامل کسب‌وکار: [`BUSINESS-RULES.md`](./BUSINESS-RULES.md) — **BR-001 تا BR-047**
@@ -81,6 +81,89 @@
 
 ---
 
+### PaymentLedgerEntry (دفتر یکپارچه تراکنش‌های مالی)
+
+Append-only ledger per tenant — **هرگز hard delete**؛ ابطال با reversing entry و `status: voided` روی سطر اصلی.
+
+| فیلد | نوع | توضیح |
+|------|-----|--------|
+| id | UUID | |
+| tenant_id | UUID | |
+| branch_id | UUID | **NOT NULL** — ADR-015 |
+| entry_type | enum | `payment_in`, `payment_out`, `refund`, `fee`, `penalty`, `discount`, `adjustment`, `settlement` |
+| direction | enum | `credit`, `debit` |
+| amount_rial | BigInt | ADR-007 |
+| status | enum | `posted`, `voided` |
+| occurred_at | timestamptz | زمان وقوع مالی |
+| recorded_at | timestamptz | زمان ثبت در دفتر |
+| payment_method | string? | `cash`, `bank_transfer`, … |
+| payment_attempt_id | UUID? | لینک به PaymentAttempt |
+| installment_id | UUID? | |
+| sale_id | UUID? | |
+| check_id | UUID? | IFP-111+ |
+| settlement_batch_id | UUID? | تسویه دسته‌ای |
+| reverses_entry_id | UUID? | سطر reversing برای void |
+| voided_at / voided_by / void_reason | | metadata ابطال |
+
+**Semantics (IFP-101):**
+
+| رویداد | entry |
+|--------|-------|
+| Confirm payment (IFP-092) | `PAYMENT_IN` + `CREDIT` — `occurredAt` = `confirmedAt` |
+| Void payment (IFP-094) | reversing `DEBIT` + original → `status: voided` |
+| Penalty / discount (IFP-097/098) | `PENALTY` / `DISCOUNT` entries (handlers فاز ۶+) |
+
+**Invariant:**
+
+- Unique `(payment_attempt_id, entry_type)` where `status = posted` — idempotent confirm retry
+- `onDelete: Restrict` on all FKs — ADR-013
+- Soft delete base fields برای audit؛ ledger semantics از reversing entry پیروی می‌کند نه `deleted_at`
+
+---
+
+### Check (چک دریافتی / پرداختی — IFP-111)
+
+Entity مستقل برای چرخه کامل چک — لینک اختیاری به PaymentAttempt، PaymentLedgerEntry، Sale و Installment.
+
+| فیلد | نوع | توضیح |
+|------|-----|--------|
+| id | UUID | |
+| tenant_id | UUID | |
+| branch_id | UUID | **NOT NULL** — ADR-015 |
+| check_type | enum | `received`, `payable` |
+| status | enum | `registered`, `due`, `collected`, `bounced`, `transferred`, `cancelled` |
+| check_number | string | شماره چک |
+| bank_name | string | نام بانک |
+| bank_branch_code | string? | کد شعبه |
+| amount_rial | BigInt | ADR-007 |
+| due_date | timestamptz | سررسید |
+| drawer_name | string | صادرکننده |
+| payee_name | string? | دریافت‌کننده |
+| sayad_id | string? | شناسه صیاد |
+| payment_attempt_id | UUID? | لینک به PaymentAttempt (IFP-091) |
+| ledger_entry_id | UUID? | سطر ledger اصلی پس از وصول |
+| installment_id | UUID? | |
+| sale_id | UUID? | |
+| image_file_id | UUID? | تصویر اسکن چک |
+| collected_at / bounced_at / bounce_reason | | lifecycle timestamps |
+| transferred_to / transferred_at | | انتقال چک |
+| tracking_notes | text? | یادداشت پیگیری |
+
+**Indexes:**
+
+- `(tenant_id, status)` — لیست بر اساس وضعیت
+- `(tenant_id, due_date)` — سررسید / overdue job
+- `(tenant_id, check_number, bank_name)` — جستجو
+- Partial unique `(tenant_id, check_number, bank_name) WHERE deleted_at IS NULL` — جلوگیری از duplicate فعال
+
+**Invariant:**
+
+- `onDelete: Restrict` on all FKs — ADR-013
+- Soft delete via base fields — state transitions in IFP-112
+- `PaymentLedgerEntry.check_id` ↔ `Check.ledger_entry_id` — dual optional link for ledger posting
+
+---
+
 ### PersonalInstallment (اقساط شخصی مشتری)
 
 مستقل از tenant — متعلق به `GlobalCustomer`.
@@ -123,8 +206,9 @@ Runtime object — persist نمی‌شود as entity جدا (settings + branch o
 | `InstallmentDueSoon` | installmentId, daysUntil | schedule/send reminder |
 | `InstallmentOverdue` | installmentId | reminder + notify seller |
 | `PaymentReported` | attemptId, installmentId | notify seller |
-| `PaymentConfirmed` | installmentId, attemptId | thank customer, stats |
+| `PaymentConfirmed` | installmentId, attemptId | thank customer, stats, **post ledger PAYMENT_IN** |
 | `PaymentRejected` | attemptId, reason | notify customer |
+| `PaymentVoided` | attemptId, installmentId | **post reversing ledger entry** |
 | `CustomerLinkedToBot` | customerId, platform | enable reminders |
 
 ---
@@ -161,6 +245,25 @@ IF status == pending AND due_date < today (Tehran)
   → raise InstallmentOverdue (در outbox)
   → batch 500 per transaction
 ```
+
+### Installment Advanced Operations (IFP-079)
+
+Pure domain validation lives in `packages/domain/src/installments/installment-operations.service.ts` — consumed by Phase 05 use cases (reschedule, defer, accelerate, regenerate, merge, split).
+
+| Operation | Allowed status | Key invariant |
+|-----------|----------------|---------------|
+| reschedule | pending, overdue | `newDueDate ≥ today` (Tehran) unless `allow_past_reschedule` |
+| defer | pending only | `0 < deferDays ≤ defer_max_days` |
+| accelerate | pending, overdue | `newDueDate ≤ current dueDate` |
+| regenerate | sale active | no paid/waived in affected range; sum amounts conserved |
+| merge | ≥2 pending/overdue same sale | merged amount = sum(sources) |
+| split | 1 pending/overdue | parts sum = original; each part ≥ `split_min_part_rial` |
+
+Policy value objects: `ReschedulePolicy`, `DeferPolicy`, `MergeSplitPolicy` — defaults align with tenant settings keys introduced in IFP-080+.
+
+Terminal states (`paid`, `waived`) block all operations → `INSTALLMENT_STATUS_INVALID` / `INSTALLMENT_ALREADY_WAIVED`.
+
+See [`state-machines.md`](./state-machines.md) and IFP-TASK-079.
 
 ### Auto-Complete Sale (BR-018)
 
@@ -240,6 +343,13 @@ Columns: `phone`, `name`, `local_code?`, `notes?`
 | `INSTALLMENT_ALREADY_PAID` | 409 | تأیید پرداخت قسط پرداخت‌شده |
 | `INSTALLMENT_ALREADY_WAIVED` | 409 | بخشودگی قسط بخشوده‌شده |
 | `INSTALLMENT_STATUS_INVALID` | 409 | transition غیرمجاز |
+| `INSTALLMENT_ALREADY_WAIVED` | 409 | عملیات روی قسط بخشوده‌شده |
+| `AMOUNT_MISMATCH` | 400 | عدم حفظ مجموع مبلغ (merge/split/regenerate) |
+| `MERGE_MIN_COUNT` | 400 | ادغام کمتر از ۲ قسط |
+| `SPLIT_INVALID_PARTS` | 400 | تقسیم نامعتبر |
+| `REGENERATE_PAID_BLOCKED` | 409 | بازتولید با قسط paid در بازه |
+| `DEFER_MAX_EXCEEDED` | 400 | تعویق بیش از سقف tenant |
+| `DUE_DATE_IN_PAST` | 400 | تاریخ سررسید قبل از امروز (تهران) |
 | `PAYMENT_ALREADY_CONFIRMED` | 409 | تأیید پرداخت تأییدشده |
 | `PAYMENT_ALREADY_REJECTED` | 409 | رد پرداخت ردشده |
 | `PAYMENT_PENDING_EXISTS` | 409 | ثبت پرداخت جدید با pending موجود |
@@ -256,6 +366,8 @@ Columns: `phone`, `name`, `local_code?`, `notes?`
 
 ```
 Sale          → Installment[] → PaymentAttempt[]
+              ↘ PaymentLedgerEntry[] (tenant-wide ledger)
+              ↘ Check[] (received / payable)
 PersonalInstallment (GlobalCustomer-owned)
 NotificationLog (append-only)
 ```
@@ -278,4 +390,4 @@ NotificationLog (append-only)
 
 ---
 
-*نسخه 1.1 — 1405/04/08*
+*نسخه 1.2 — 1405/07/03*

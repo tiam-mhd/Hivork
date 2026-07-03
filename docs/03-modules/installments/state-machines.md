@@ -111,6 +111,94 @@ Customer report: **همیشه** pending تا confirm (default setting).
 
 ---
 
+## Check Status (IFP-112)
+
+```mermaid
+stateDiagram-v2
+    [*] --> registered : register check
+    registered --> due : markDue (due date reached / manual)
+    registered --> collected : collect (early deposit)
+    registered --> transferred : transfer
+    registered --> cancelled : cancel
+    due --> collected : collect
+    due --> bounced : bounce
+    due --> transferred : transfer
+    due --> cancelled : cancel
+    collected --> [*] : terminal
+    bounced --> [*] : terminal — new payment required
+    transferred --> [*] : terminal
+    cancelled --> [*] : terminal
+
+    note right of bounced
+        Installment remains unpaid
+        new payment attempt required
+    end note
+```
+
+```
+    ┌─────────────┐
+    │ registered  │◄── register received / payable check
+    └──────┬──────┘
+           │
+     ┌─────┼─────────────────────────────┐
+     │ due_date reached / manual markDue │
+     ▼                                   │
+    ┌─────────────┐                        │
+    │     due     │────────────────────────┤
+    └──────┬──────┘                        │
+           │                               │
+     ┌─────┼─────┬──────────┐              │
+     ▼     ▼     ▼          ▼              ▼
+┌──────────┐ ┌────────┐ ┌────────────┐ ┌───────────┐
+│collected │ │bounced │ │transferred │ │ cancelled │
+└──────────┘ └────────┘ └────────────┘ └───────────┘
+     ▲
+     │ collect (from registered — early deposit)
+     └──────────────────────────────────────────
+```
+
+### Transition Rules
+
+| From | To | Trigger | Actor |
+|------|-----|---------|-------|
+| `registered` | `due` | due date reached or manual markDue | system / staff |
+| `registered` | `collected` | collect (early deposit) | staff |
+| `registered` | `bounced` | bounce with reason (received only) | staff |
+| `registered` | `transferred` | transfer action | staff |
+| `registered` | `cancelled` | cancel before collect | staff |
+| `due` | `collected` | collect / bank clearance | staff |
+| `due` | `bounced` | bounce with reason (received only) | staff |
+| `due` | `transferred` | transfer action | staff |
+| `due` | `cancelled` | cancel | staff |
+| `collected` | `bounced` | bounce after collect | staff + `check_allow_bounce_after_collect` |
+| `collected` | * | — | **ممنوع** (except bounce above) |
+| `bounced` | * | — | **ممنوع** (new payment attempt instead) |
+| `transferred` | * | — | **ممنوع** |
+| `cancelled` | * | — | **ممنوع** |
+
+### Domain errors
+
+| Scenario | Code |
+|----------|------|
+| Bounce payable check | `CHECK_TYPE_NOT_RECEIVABLE` |
+| Bounce already bounced | `CHECK_ALREADY_BOUNCED` |
+| Bounce collected (setting off) | `CHECK_ALREADY_COLLECTED` |
+| markDue before due date (scheduler) | `CHECK_NOT_DUE` |
+| Invalid status transition | `CHECK_STATUS_INVALID` |
+| Non-positive amount | `CHECK_AMOUNT_INVALID` |
+
+### Payable check (IFP-114)
+
+```
+registered → due → collected (paid out) | cancelled
+```
+
+Payable checks cannot be bounced — use `cancelled` instead.
+
+> **Soft delete** (`deletedAt`) is orthogonal to lifecycle status — cancel sets `cancelled` status; hard delete follows `SOFT-DELETE-POLICY.md`.
+
+---
+
 ## Sale Status
 
 ### Phase 1 (MVP)
