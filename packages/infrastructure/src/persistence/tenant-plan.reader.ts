@@ -18,6 +18,19 @@ function readMaxActiveSalesFromMetadata(metadata: unknown): number | null {
 export class PrismaTenantPlanReader implements ITenantPlanReader {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getPlanCode(tenantId: string): Promise<string> {
+    const tenant = await this.prisma.tenant.findFirst({
+      where: { id: tenantId, deletedAt: null },
+      select: { plan: { select: { code: true } } },
+    });
+
+    if (!tenant) {
+      throw new Error(`Tenant not found: ${tenantId}`);
+    }
+
+    return tenant.plan.code;
+  }
+
   async getMaxCustomers(tenantId: string): Promise<number> {
     const tenant = await this.prisma.tenant.findFirst({
       where: { id: tenantId, deletedAt: null },

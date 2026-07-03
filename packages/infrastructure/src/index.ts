@@ -13,6 +13,11 @@ export { TotpVerificationService } from './auth/totp-verification.service.js';
 export { parseJwtTtl, type JwtTokenConfig } from './auth/jwt.config.js';
 export { PrismaModule } from './prisma/prisma.module.js';
 export { PrismaService } from './prisma/prisma.service.js';
+export {
+  BankStatementParseError,
+  parseBankStatementCsv,
+  type BankStatementRow,
+} from './parsers/bank-statement-csv.parser.js';
 export { createHivorkPrismaClient, type HivorkPrismaClient } from './prisma/prisma.client.js';
 export { HardDeleteForbiddenError } from './prisma/errors/hard-delete-forbidden.error.js';
 export { InstallmentCannotDeleteError } from './prisma/errors/installment-cannot-delete.error.js';
@@ -55,7 +60,17 @@ export {
   NoOpInstallmentScheduleExtender,
   NoOpInstallmentCloseWaiver,
   PrismaInstallmentRepository,
+  PrismaInstallmentAdjustmentRepository,
+  PrismaInstallmentOperationLogRepository,
   PrismaInstallmentReportRepository,
+  PrismaPaymentAttemptRepository,
+  PrismaPaymentLedgerRepository,
+  PrismaSettlementBatchRepository,
+  PrismaCheckRepository,
+  PrismaStoredFileRepository,
+  PrismaCheckTrackingNoteRepository,
+  PrismaReconciliationRepository,
+  PrismaPaymentReceiptRepository,
   PrismaOverdueReportRepository,
   PrismaSaleIdempotencyStore,
   PrismaUnitOfWork,
@@ -72,6 +87,14 @@ export {
   PrismaOutboxPublisher as OutboxPublisher,
   OutboxProcessorService,
 } from './persistence/index.js';
+export {
+  MockPaymentGateway,
+  MockPaymentGatewayRegistry,
+  MOCK_PAYMENT_GATEWAY_PROVIDER,
+  signMockPaymentGatewayPayload,
+  verifyMockPaymentGatewaySignature,
+} from './payment/mock-payment.gateway.js';
+export { PrismaNotificationDispatcher } from './notifications/prisma-notification-dispatcher.js';
 export { RedisModule } from './redis/redis.module.js';
 export { RedisService } from './redis/redis.service.js';
 export { RedisOtpStore } from './redis/redis-otp.store.js';
@@ -121,6 +144,10 @@ export { CustomerXlsxExportWriter } from './export/customer-xlsx.writer.js';
 export { CustomerPdfExportWriter } from './export/customer-pdf.writer.js';
 export { LocalFileStorageService } from './files/local-file-storage.service.js';
 export { NoopFileVirusScanPort } from './files/noop-file-virus-scan.port.js';
+export {
+  buildCheckImageStorageKey,
+  extensionForCheckImageMime,
+} from './storage/check-image.adapter.js';
 export { PrismaCustomerDocumentRepository } from './persistence/customer-document.repository.js';
 export { PrismaCustomerNoteRepository } from './persistence/customer-note.repository.js';
 export { CustomerTimelineQuery } from './persistence/queries/customer-timeline.query.js';

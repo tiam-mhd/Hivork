@@ -1,12 +1,25 @@
 import type {
+  ApplyInstallmentPaymentInput,
+  ApplyInstallmentPaymentResult,
+  ApplyInstallmentPenaltyInput,
+  ApplyInstallmentPenaltyResult,
+  ApplyInstallmentDiscountInput,
+  ApplyInstallmentDiscountResult,
   IInstallmentRepository,
   InstallmentListItem,
   InstallmentRecord,
+  InstallmentWithSaleRecord,
   ListInstallmentsQueryOptions,
   ListInstallmentsResult,
   OutboxTransaction,
   RegenerateInstallmentScheduleInput,
+  RescheduleInstallmentDueDateInput,
+  RescheduleInstallmentDueDateResult,
   SaveInstallmentPersistenceInput,
+  SoftDeleteInstallmentsForRegenerateInput,
+  SoftDeleteInstallmentsForMergeInput,
+  WaiveInstallmentPersistenceInput,
+  WaiveInstallmentPersistenceResult,
 } from '@hivork/application';
 import { ApplicationError } from '@hivork/application';
 import { calculateInstallmentSchedule } from '@hivork/domain';
@@ -39,6 +52,7 @@ function installmentToRecord(row: Installment): InstallmentRecord {
     waivedByStaffId: row.waivedByStaffId,
     waiveReason: row.waiveReason,
     version: row.version,
+    metadata: (row.metadata as Record<string, unknown> | null) ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -301,6 +315,390 @@ export class PrismaInstallmentRepository implements IInstallmentRepository {
     );
 
     return updatedRows;
+  }
+
+  async findByIdWithSale(
+    tenantId: string,
+    installmentId: string,
+    tx?: OutboxTransaction,
+  ): Promise<InstallmentWithSaleRecord | null> {
+    const client = resolveClient(this.prisma, tx);
+
+    const row = await client.installment.findFirst({
+      where: { id: installmentId, tenantId, deletedAt: null },
+      include: {
+        sale: {
+          select: {
+            id: true,
+            branchId: true,
+            tenantCustomerId: true,
+            status: true,
+            archivedAt: true,
+            createdByStaffId: true,
+            deletedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!row || row.sale.deletedAt) {
+      return null;
+    }
+
+    return {
+      installment: installmentToRecord(row),
+      sale: {
+        id: row.sale.id,
+        branchId: row.sale.branchId,
+        tenantCustomerId: row.sale.tenantCustomerId,
+        status: row.sale.status,
+        archivedAt: row.sale.archivedAt,
+        createdByStaffId: row.sale.createdByStaffId,
+      },
+    };
+  }
+
+  async findByIdsForSale(
+    tenantId: string,
+    saleId: string,
+    installmentIds: string[],
+    tx?: OutboxTransaction,
+  ): Promise<InstallmentRecord[]> {
+    if (installmentIds.length === 0) {
+      return [];
+    }
+
+    const client = resolveClient(this.prisma, tx);
+
+    const rows = await client.installment.findMany({
+      where: {
+        tenantId,
+        saleId,
+        id: { in: installmentIds },
+        deletedAt: null,
+      },
+    });
+
+    return rows.map(installmentToRecord);
+  }
+
+  async rescheduleDueDate(
+    input: RescheduleInstallmentDueDateInput,
+    tx?: OutboxTransaction,
+  ): Promise<RescheduleInstallmentDueDateResult> {
+    const client = resolveClient(this.prisma, tx);
+
+    const updated = await client.installment.updateMany({
+      where: {
+        id: input.installmentId,
+        tenantId: input.tenantId,
+        version: input.expectedVersion,
+        deletedAt: null,
+      },
+      data: {
+        dueDate: input.newDueDate,
+        ...(input.status ? { status: input.status } : {}),
+        updatedById: input.updatedById,
+        version: { increment: 1 },
+      },
+    });
+
+    if (updated.count === 1) {
+      const row = await client.installment.findFirstOrThrow({
+        where: { id: input.installmentId, tenantId: input.tenantId, deletedAt: null },
+      });
+      return { outcome: 'updated', installment: installmentToRecord(row) };
+    }
+
+    const existing = await client.installment.findFirst({
+      where: { id: input.installmentId, tenantId: input.tenantId, deletedAt: null },
+    });
+
+    if (!existing) {
+      return { outcome: 'not_found' };
+    }
+
+    return { outcome: 'version_conflict', currentVersion: existing.version };
+  }
+
+  async applyPaymentConfirm(
+    input: ApplyInstallmentPaymentInput,
+    tx?: OutboxTransaction,
+  ): Promise<ApplyInstallmentPaymentResult> {
+    const client = resolveClient(this.prisma, tx);
+
+    const updated = await client.installment.updateMany({
+      where: {
+        id: input.installmentId,
+        tenantId: input.tenantId,
+        version: input.expectedVersion,
+        deletedAt: null,
+      },
+      data: {
+        status: input.status,
+        paidAt: input.paidAt,
+        confirmedByStaffId: input.confirmedByStaffId,
+        metadata: input.metadata as Prisma.InputJsonValue,
+        updatedById: input.updatedById,
+        version: { increment: 1 },
+      },
+    });
+
+    if (updated.count === 1) {
+      const row = await client.installment.findFirstOrThrow({
+        where: { id: input.installmentId, tenantId: input.tenantId, deletedAt: null },
+      });
+      return { outcome: 'updated', installment: installmentToRecord(row) };
+    }
+
+    const existing = await client.installment.findFirst({
+      where: { id: input.installmentId, tenantId: input.tenantId, deletedAt: null },
+    });
+
+    if (!existing) {
+      return { outcome: 'not_found' };
+    }
+
+    return { outcome: 'version_conflict', currentVersion: existing.version };
+  }
+
+  async waive(
+    input: WaiveInstallmentPersistenceInput,
+    tx?: OutboxTransaction,
+  ): Promise<WaiveInstallmentPersistenceResult> {
+    const client = resolveClient(this.prisma, tx);
+
+    const updated = await client.installment.updateMany({
+      where: {
+        id: input.installmentId,
+        tenantId: input.tenantId,
+        version: input.expectedVersion,
+        status: { in: ['PENDING', 'OVERDUE'] },
+        deletedAt: null,
+      },
+      data: {
+        status: 'WAIVED',
+        waivedByStaffId: input.waivedByStaffId,
+        waiveReason: input.waiveReason,
+        updatedById: input.updatedById,
+        version: { increment: 1 },
+      },
+    });
+
+    if (updated.count === 1) {
+      const row = await client.installment.findFirstOrThrow({
+        where: { id: input.installmentId, tenantId: input.tenantId, deletedAt: null },
+      });
+      return { outcome: 'updated', installment: installmentToRecord(row) };
+    }
+
+    const existing = await client.installment.findFirst({
+      where: { id: input.installmentId, tenantId: input.tenantId, deletedAt: null },
+    });
+
+    if (!existing) {
+      return { outcome: 'not_found' };
+    }
+
+    if (existing.status !== 'PENDING' && existing.status !== 'OVERDUE') {
+      return { outcome: 'status_invalid', status: existing.status };
+    }
+
+    return { outcome: 'version_conflict', currentVersion: existing.version };
+  }
+
+  async applyPenaltyAmount(
+    input: ApplyInstallmentPenaltyInput,
+    tx?: OutboxTransaction,
+  ): Promise<ApplyInstallmentPenaltyResult> {
+    const client = resolveClient(this.prisma, tx);
+
+    const updated = await client.installment.updateMany({
+      where: {
+        id: input.installmentId,
+        tenantId: input.tenantId,
+        version: input.expectedVersion,
+        status: 'OVERDUE',
+        deletedAt: null,
+      },
+      data: {
+        amountRial: { increment: input.penaltyAmountRial },
+        updatedById: input.updatedById,
+        version: { increment: 1 },
+      },
+    });
+
+    if (updated.count === 1) {
+      const row = await client.installment.findFirstOrThrow({
+        where: { id: input.installmentId, tenantId: input.tenantId, deletedAt: null },
+      });
+      return { outcome: 'updated', installment: installmentToRecord(row) };
+    }
+
+    const existing = await client.installment.findFirst({
+      where: { id: input.installmentId, tenantId: input.tenantId, deletedAt: null },
+    });
+
+    if (!existing) {
+      return { outcome: 'not_found' };
+    }
+
+    if (existing.status !== 'OVERDUE') {
+      return { outcome: 'status_invalid', status: existing.status };
+    }
+
+    return { outcome: 'version_conflict', currentVersion: existing.version };
+  }
+
+  async applyDiscountAmount(
+    input: ApplyInstallmentDiscountInput,
+    tx?: OutboxTransaction,
+  ): Promise<ApplyInstallmentDiscountResult> {
+    const client = resolveClient(this.prisma, tx);
+
+    const updated = await client.installment.updateMany({
+      where: {
+        id: input.installmentId,
+        tenantId: input.tenantId,
+        version: input.expectedVersion,
+        status: { in: ['PENDING', 'OVERDUE'] },
+        deletedAt: null,
+        amountRial: { gte: input.discountAmountRial },
+      },
+      data: {
+        amountRial: { decrement: input.discountAmountRial },
+        updatedById: input.updatedById,
+        version: { increment: 1 },
+      },
+    });
+
+    if (updated.count === 1) {
+      const row = await client.installment.findFirstOrThrow({
+        where: { id: input.installmentId, tenantId: input.tenantId, deletedAt: null },
+      });
+      return { outcome: 'updated', installment: installmentToRecord(row) };
+    }
+
+    const existing = await client.installment.findFirst({
+      where: { id: input.installmentId, tenantId: input.tenantId, deletedAt: null },
+    });
+
+    if (!existing) {
+      return { outcome: 'not_found' };
+    }
+
+    if (existing.status !== 'PENDING' && existing.status !== 'OVERDUE') {
+      return { outcome: 'status_invalid', status: existing.status };
+    }
+
+    if (existing.amountRial < input.discountAmountRial) {
+      return { outcome: 'amount_invalid' };
+    }
+
+    return { outcome: 'version_conflict', currentVersion: existing.version };
+  }
+
+  async syncSaleOutstandingRial(
+    tenantId: string,
+    saleId: string,
+    tx?: OutboxTransaction,
+  ): Promise<bigint> {
+    const client = (tx ?? this.prisma) as PrismaService;
+    const rows = await client.installment.findMany({
+      where: { tenantId, saleId, deletedAt: null },
+      select: { status: true, amountRial: true },
+    });
+
+    const outstanding = rows
+      .filter((row) => row.status === 'PENDING' || row.status === 'OVERDUE')
+      .reduce((sum, row) => sum + row.amountRial, 0n);
+
+    const sale = await client.sale.findFirst({
+      where: { id: saleId, tenantId, deletedAt: null },
+      select: { metadata: true },
+    });
+
+    if (sale) {
+      const metadata =
+        sale.metadata && typeof sale.metadata === 'object' && !Array.isArray(sale.metadata)
+          ? { ...(sale.metadata as Record<string, unknown>) }
+          : {};
+
+      metadata.remainingRial = outstanding.toString();
+
+      await client.sale.updateMany({
+        where: { id: saleId, tenantId, deletedAt: null },
+        data: { metadata: metadata as Prisma.InputJsonValue },
+      });
+    }
+
+    return outstanding;
+  }
+
+  async getMaxSequenceNumber(
+    tenantId: string,
+    saleId: string,
+    tx?: OutboxTransaction,
+  ): Promise<number> {
+    const client = (tx ?? this.prisma) as Pick<PrismaService, '$queryRaw'>;
+
+    const rows = await client.$queryRaw<Array<{ max: number | null }>>`
+      SELECT MAX(sequence_number) AS max
+      FROM installments
+      WHERE tenant_id = ${tenantId}::uuid
+        AND sale_id = ${saleId}::uuid
+    `;
+
+    return rows[0]?.max ?? 0;
+  }
+
+  async softDeleteForRegenerate(
+    input: SoftDeleteInstallmentsForRegenerateInput,
+    tx?: OutboxTransaction,
+  ): Promise<number> {
+    if (input.installmentIds.length === 0) {
+      return 0;
+    }
+
+    const client = (tx ?? this.prisma) as Pick<PrismaService, '$executeRaw'>;
+
+    return client.$executeRaw`
+      UPDATE installments
+      SET
+        deleted_at = NOW(),
+        deleted_by_id = ${input.deletedById}::uuid,
+        delete_reason = ${input.deleteReason},
+        updated_by_id = ${input.deletedById}::uuid,
+        version = version + 1
+      WHERE tenant_id = ${input.tenantId}::uuid
+        AND id = ANY(${input.installmentIds}::uuid[])
+        AND deleted_at IS NULL
+    `;
+  }
+
+  async softDeleteForMerge(
+    input: SoftDeleteInstallmentsForMergeInput,
+    tx?: OutboxTransaction,
+  ): Promise<number> {
+    if (input.installmentIds.length === 0) {
+      return 0;
+    }
+
+    const client = (tx ?? this.prisma) as Pick<PrismaService, '$executeRaw'>;
+
+    return client.$executeRaw`
+      UPDATE installments
+      SET
+        deleted_at = NOW(),
+        deleted_by_id = ${input.deletedById}::uuid,
+        delete_reason = ${input.deleteReason},
+        sequence_number = 1000000 + sequence_number,
+        updated_by_id = ${input.deletedById}::uuid,
+        version = version + 1
+      WHERE tenant_id = ${input.tenantId}::uuid
+        AND id = ANY(${input.installmentIds}::uuid[])
+        AND deleted_at IS NULL
+    `;
   }
 
   async list(

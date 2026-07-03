@@ -29,7 +29,17 @@ export { MetadataSaleCopyRelatedRepository } from './metadata-sale-copy-related.
 export { NoOpInstallmentScheduleExtender } from './noop-installment-schedule-extender.js';
 export { NoOpInstallmentCloseWaiver } from './noop-installment-close-waiver.js';
 export { PrismaInstallmentRepository } from './installment.repository.js';
+export { PrismaInstallmentAdjustmentRepository } from './installment-adjustment.repository.js';
+export { PrismaInstallmentOperationLogRepository } from './installment-operation-log.repository.js';
 export { PrismaInstallmentReportRepository } from './installment-report.repository.js';
+export { PrismaPaymentAttemptRepository } from './payment-attempt.repository.js';
+export { PrismaPaymentLedgerRepository } from './payment-ledger.repository.js';
+export { PrismaSettlementBatchRepository } from './settlement-batch.repository.js';
+export { PrismaCheckRepository } from './check.repository.js';
+export { PrismaStoredFileRepository } from './stored-file.repository.js';
+export { PrismaCheckTrackingNoteRepository } from './check-tracking-note.repository.js';
+export { PrismaReconciliationRepository } from './reconciliation.repository.js';
+export { PrismaPaymentReceiptRepository } from './payment-receipt.repository.js';
 export { PrismaOverdueReportRepository } from './overdue-report.repository.js';
 export { PrismaSaleIdempotencyStore } from './sale-idempotency.store.js';
 export { PrismaUnitOfWork } from './prisma-unit-of-work.js';
@@ -46,4 +56,11 @@ export { PrismaTenantSettingsRepository } from '../settings/prisma-tenant-settin
 export { SettingsSchemaRegistry } from '../settings/settings-schema.registry.js';
 export { PrismaOutboxPublisher } from '../outbox/prisma-outbox.publisher.js';
 export { OutboxProcessorService } from '../outbox/outbox-processor.service.js';
+export {
+  MockPaymentGateway,
+  MockPaymentGatewayRegistry,
+  MOCK_PAYMENT_GATEWAY_PROVIDER,
+  signMockPaymentGatewayPayload,
+  verifyMockPaymentGatewaySignature,
+} from '../payment/mock-payment.gateway.js';
 export { tenantToCreateInput, tenantToDomain, tenantToUpdateInput } from './mappers/tenant.mapper.js';

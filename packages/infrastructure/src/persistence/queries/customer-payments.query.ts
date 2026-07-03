@@ -30,12 +30,14 @@ const STATUS_TO_DB: Record<CustomerPaymentStatus, string> = {
   pending: 'PENDING',
   confirmed: 'CONFIRMED',
   rejected: 'REJECTED',
+  voided: 'VOIDED',
 };
 
 const STATUS_FROM_DB: Record<string, CustomerPaymentStatus> = {
   PENDING: 'pending',
   CONFIRMED: 'confirmed',
   REJECTED: 'rejected',
+  VOIDED: 'voided',
 };
 
 const VALID_METHODS = new Set([
