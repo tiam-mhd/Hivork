@@ -91,6 +91,12 @@ jobs:
       - name: Phase 04 contract enterprise integration tests (IFP-078)
         run: pnpm --filter @hivork/api exec vitest run test/integration/phase04-contract-enterprise.spec.ts
 
+      - name: Phase 05 vertical slice integration tests (IFP-100)
+        run: pnpm --filter @hivork/api exec vitest run test/integration/phase05-vertical-slice.spec.ts
+
+      - name: Phase 06 vertical slice integration tests (IFP-118)
+        run: pnpm --filter @hivork/api exec vitest run test/integration/phase06-vertical-slice.spec.ts
+
       - name: Build
         run: pnpm turbo build
 

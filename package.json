@@ -23,7 +23,9 @@
     "ci:rtl-class-check": "node scripts/check-rtl-classes.mjs",
     "test:phase-01-auth": "pnpm --filter @hivork/integration-tests test:phase-01-auth && pnpm --filter @hivork/web exec playwright test phase-01-auth",
     "test:phase-03-customers": "pnpm --filter @hivork/api test:integration -- test/integration/customers",
-    "test:phase-04-contract-enterprise": "pnpm --filter @hivork/api test:integration -- test/integration/phase04-contract-enterprise.spec.ts && pnpm --filter @hivork/web exec playwright test phase04-contract-e2e"
+    "test:phase-04-contract-enterprise": "pnpm --filter @hivork/api test:integration -- test/integration/phase04-contract-enterprise.spec.ts && pnpm --filter @hivork/web exec playwright test phase04-contract-e2e",
+    "test:integration:phase05": "pnpm --filter @hivork/api test:integration -- test/integration/phase05-vertical-slice.spec.ts",
+    "test:integration:phase06": "pnpm --filter @hivork/api test:integration -- test/integration/phase06-vertical-slice.spec.ts"
   },
   "engines": {
     "node": ">=20",
