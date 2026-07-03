@@ -107,6 +107,7 @@ export const InstallmentInSaleSchema = z.object({
   status: InstallmentStatusSchema,
   paidAt: z.string().datetime().nullable().optional(),
   confirmedBy: z.string().uuid().nullable().optional(),
+  version: z.number().int().positive().optional(),
 });
 
 export type InstallmentInSaleDto = z.infer<typeof InstallmentInSaleSchema>;

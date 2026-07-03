@@ -33,6 +33,7 @@ export const installmentsPenaltyInterestSettingsShape = {
   penalty_rate_bps: z.number().int().min(0).max(10000).default(0),
   penalty_fixed_rial: bigintRialNonNegativeSchema.default('0'),
   penalty_grace_days: z.number().int().min(0).max(30).default(0),
+  penalty_max_rial: bigintRialNonNegativeSchema.default('0'),
   interest_rate_bps_annual: z.number().int().min(0).max(10000).default(0),
   interest_calculation_method: interestCalculationMethodSchema.default('none'),
 } as const;
@@ -90,6 +91,9 @@ export type ContractNumberingSettingsDto = z.infer<typeof ContractNumberingSetti
 
 export const READONLY_INSTALLMENTS_SETTING_KEYS = ['contract_number_next_sequence'] as const;
 
+/** Managed via GET/PATCH `/api/v1/settings/payment-methods` (IFP-106). */
+export { PAYMENT_METHODS_SETTING_KEY } from '../settings/payment-method-settings.schema.js';
+
 const contractNumberNextSequenceSchema = z.number().int().min(1);
 
 function refinePenaltyInterestSettings(
@@ -146,6 +150,16 @@ export const InstallmentsSettingsFieldsSchema = z.object({
     .max(1000)
     .nullable()
     .default(null),
+  /** IFP-081 — max calendar days per defer request (default 30). */
+  defer_max_days: z.number().int().min(1).max(365).default(30),
+  /** IFP-087 — allow reporting less than installment remaining balance. */
+  payment_allow_partial: z.boolean().default(false),
+  /** IFP-087 — allow staff to set paidAt in the past on payment report. */
+  payment_allow_backdate: z.boolean().default(false),
+  /** IFP-098 — max discount as basis points of current installment amount (10000 = 100%). */
+  discount_max_percent_bps: z.number().int().min(0).max(10_000).default(10_000),
+  /** IFP-098 — minimum installment amount after discount is applied. */
+  min_installment_rial: bigintRialNonNegativeSchema.default('0'),
   ...installmentsPenaltyInterestSettingsShape,
   ...installmentsRoundingHolidaySettingsShape,
   ...installmentsCalendarNumberingSettingsShape,
@@ -208,4 +222,4 @@ export type GetInstallmentsSettingsApiResponseDto = z.infer<
 export const DEFAULT_INSTALLMENTS_SETTINGS: InstallmentsSettingsDto =
   InstallmentsSettingsSchema.parse({});
 
-export const INSTALLMENTS_SETTINGS_SCHEMA_VERSION = '1.3.0';
+export const INSTALLMENTS_SETTINGS_SCHEMA_VERSION = '1.5.0';

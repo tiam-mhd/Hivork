@@ -47,21 +47,43 @@ describe('ReportPaymentSchema', () => {
 });
 
 describe('ConfirmPaymentSchema', () => {
-  it('accepts empty body', () => {
-    expect(ConfirmPaymentSchema.parse({})).toEqual({});
+  it('parses confirm request with optimistic locking versions', () => {
+    expect(
+      ConfirmPaymentSchema.parse({
+        note: 'رسید بانکی تطبیق شد',
+        expectedAttemptVersion: 1,
+        expectedInstallmentVersion: 3,
+      }),
+    ).toEqual({
+      note: 'رسید بانکی تطبیق شد',
+      expectedAttemptVersion: 1,
+      expectedInstallmentVersion: 3,
+    });
   });
 
-  it('rejects unknown fields', () => {
+  it('requires expected versions', () => {
     expect(() => ConfirmPaymentSchema.parse({ note: 'x' })).toThrow();
   });
 });
 
 describe('RejectPaymentSchema', () => {
-  it('reason min 3 chars', () => {
-    expect(RejectPaymentSchema.parse({ reason: 'رسید نادرست است' }).reason).toBe(
-      'رسید نادرست است',
-    );
-    expect(() => RejectPaymentSchema.parse({ reason: 'ab' })).toThrow();
+  it('requires rejectedReason between 3 and 500 chars and expectedVersion', () => {
+    expect(
+      RejectPaymentSchema.parse({
+        rejectedReason: 'رسید نادرست است',
+        expectedVersion: 1,
+      }),
+    ).toEqual({
+      rejectedReason: 'رسید نادرست است',
+      expectedVersion: 1,
+    });
+
+    expect(() =>
+      RejectPaymentSchema.parse({
+        rejectedReason: 'ab',
+        expectedVersion: 1,
+      }),
+    ).toThrow();
   });
 });
 

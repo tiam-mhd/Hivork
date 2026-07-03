@@ -15,6 +15,7 @@ export { normalizePhone, maskPhoneForDisplay, phoneSchema } from './phone.schema
 export {
   bigintRialNonNegativeSchema,
   bigintRialNonNegativeTransformSchema,
+  bigintRialPositiveSchema,
   bigintRialPositiveTransformSchema,
   bigintRialStringSchema,
   dateOnlySchema,

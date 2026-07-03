@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { bigintRialNonNegativeSchema, bigintRialStringSchema } from '../common/money.schema.js';
 
-export const PaymentAttemptStatusSchema = z.enum(['pending', 'confirmed', 'rejected']);
+export const PaymentAttemptStatusSchema = z.enum(['pending', 'confirmed', 'rejected', 'voided']);
 
 export type PaymentAttemptStatusDto = z.infer<typeof PaymentAttemptStatusSchema>;
 
@@ -14,15 +14,19 @@ export const ReportPaymentSchema = z.object({
 
 export type ReportPaymentDto = z.infer<typeof ReportPaymentSchema>;
 
-export const ConfirmPaymentSchema = z.object({}).strict();
+export {
+  ConfirmPaymentResponseSchema,
+  ConfirmPaymentSchema,
+  type ConfirmPaymentDto,
+  type ConfirmPaymentResponseDto,
+} from './confirm-payment.schema.js';
 
-export type ConfirmPaymentDto = z.infer<typeof ConfirmPaymentSchema>;
-
-export const RejectPaymentSchema = z.object({
-  reason: z.string().trim().min(3).max(500),
-});
-
-export type RejectPaymentDto = z.infer<typeof RejectPaymentSchema>;
+export {
+  RejectPaymentResponseSchema,
+  RejectPaymentSchema,
+  type RejectPaymentDto,
+  type RejectPaymentResponseDto,
+} from './reject-payment.schema.js';
 
 export const PaymentAttemptSchema = z.object({
   id: z.string().uuid(),
@@ -40,25 +44,6 @@ export const PaymentAttemptSchema = z.object({
 });
 
 export type PaymentAttemptDto = z.infer<typeof PaymentAttemptSchema>;
-
-export const ConfirmPaymentResponseSchema = z.object({
-  paymentId: z.string().uuid(),
-  status: z.literal('confirmed'),
-  installment: z.object({
-    id: z.string().uuid(),
-    status: z.literal('paid'),
-    paidAt: z.string().datetime(),
-  }),
-});
-
-export type ConfirmPaymentResponseDto = z.infer<typeof ConfirmPaymentResponseSchema>;
-
-export const RejectPaymentResponseSchema = z.object({
-  paymentId: z.string().uuid(),
-  status: z.literal('rejected'),
-});
-
-export type RejectPaymentResponseDto = z.infer<typeof RejectPaymentResponseSchema>;
 
 export const ReportPaymentResponseSchema = PaymentAttemptSchema;
 
