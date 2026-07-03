@@ -26,6 +26,10 @@
     "./installments/browser": {
       "types": "./dist/installments/browser.d.ts",
       "default": "./dist/installments/browser.js"
+    },
+    "./payments": {
+      "types": "./dist/payments/index.d.ts",
+      "default": "./dist/payments/index.js"
     }
   },
   "scripts": {

@@ -11,6 +11,9 @@ export {
   type InstallmentDraft,
   type InstallmentProps,
   type InstallmentSnapshot,
+  type InstallmentOperationSnapshot,
+  type InstallmentOperationType,
+  type InstallmentOperationLog,
 } from './installment.types.js';
 export { Installment } from './installment.entity.js';
 export { PaymentAttempt } from './payment-attempt.entity.js';
@@ -89,10 +92,40 @@ export {
   type PaymentConfirmedPayload,
 } from './events/payment-confirmed.event.js';
 export {
+  PaymentRejectedEvent,
+  type PaymentRejectedPayload,
+} from './events/payment-rejected.event.js';
+export {
+  PaymentVoidedEvent,
+  type PaymentVoidedPayload,
+} from './events/payment-voided.event.js';
+export {
+  PaymentReportedEvent,
+  type PaymentReportedPayload,
+} from './events/payment-reported.event.js';
+export {
   InstallmentOverdueEvent,
   type InstallmentOverduePayload,
 } from './events/installment-overdue.event.js';
-export { addUtcDays, startOfUtcDay } from './date.utils.js';
+export {
+  InstallmentWaivedEvent,
+  type InstallmentWaivedPayload,
+} from './events/installment-waived.event.js';
+export {
+  calculatePenaltyPreview,
+  assertPenaltyWithinMax,
+  computeOverdueDays,
+  isSameTehranDay,
+  type PenaltyCalculationSettings,
+  type PenaltyPreviewResult,
+  type PenaltyType,
+} from './penalty-calculator.service.js';
+export {
+  validateDiscount,
+  type DiscountValidationSettings,
+  type DiscountValidationResult,
+} from './discount-calculator.service.js';
+export { addUtcDays, compareTehranDates, startOfUtcDay, tehranDateKey } from './date.utils.js';
 export {
   DEFAULT_IRAN_OFFICIAL_HOLIDAY_DATES,
   StaticOfficialHolidayCalendarProvider,
@@ -111,3 +144,33 @@ export {
   type CalculateInstallmentScheduleInput,
   type InstallmentScheduleItem,
 } from './calculate-installment-schedule.js';
+export {
+  generateRegeneratedInstallmentSchedule,
+  sumRegeneratedScheduleAmounts,
+  REGENERATE_ROUNDING_POLICIES,
+  type GenerateRegeneratedScheduleInput,
+  type RegenerateRoundingPolicy,
+} from './installment-schedule.generator.js';
+export {
+  InstallmentOperationErrorCode,
+  InstallmentOperationNotAllowedError,
+  type InstallmentOperationErrorCode as InstallmentOperationErrorCodeType,
+} from './errors/installment-operation.errors.js';
+export {
+  InstallmentOperationsService,
+  assertAmountConservation,
+  sumAmountsRial,
+  type ValidateAccelerateInput,
+  type ValidateDeferInput,
+  type ValidateMergeInput,
+  type ValidateRegenerateInput,
+  type ValidateRescheduleInput,
+  type ValidateSequenceNumbersInput,
+  type ValidateSplitInput,
+} from './installment-operations.service.js';
+export { ReschedulePolicy, type ReschedulePolicySettings } from './value-objects/reschedule-policy.vo.js';
+export { DeferPolicy, type DeferPolicySettings } from './value-objects/defer-policy.vo.js';
+export {
+  MergeSplitPolicy,
+  type MergeSplitPolicySettings,
+} from './value-objects/merge-split-policy.vo.js';

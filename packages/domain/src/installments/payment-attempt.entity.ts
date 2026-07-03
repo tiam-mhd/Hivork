@@ -79,6 +79,9 @@ export class PaymentAttempt {
     if (this.props.status === PaymentAttemptStatus.REJECTED) {
       throw new DomainError(PaymentAttemptDomainErrorCode.PAYMENT_ALREADY_REJECTED);
     }
+    if (this.props.status === PaymentAttemptStatus.VOIDED) {
+      throw new DomainError(PaymentAttemptDomainErrorCode.PAYMENT_ALREADY_VOIDED);
+    }
     if (this.props.status !== PaymentAttemptStatus.PENDING) {
       throw new DomainError(PaymentAttemptDomainErrorCode.PAYMENT_ALREADY_CONFIRMED);
     }
@@ -102,6 +105,9 @@ export class PaymentAttempt {
     if (this.props.status === PaymentAttemptStatus.REJECTED) {
       throw new DomainError(PaymentAttemptDomainErrorCode.PAYMENT_ALREADY_REJECTED);
     }
+    if (this.props.status === PaymentAttemptStatus.VOIDED) {
+      throw new DomainError(PaymentAttemptDomainErrorCode.PAYMENT_ALREADY_VOIDED);
+    }
     if (this.props.status !== PaymentAttemptStatus.PENDING) {
       throw new DomainError(PaymentAttemptDomainErrorCode.PAYMENT_ALREADY_CONFIRMED);
     }
@@ -122,6 +128,35 @@ export class PaymentAttempt {
     this.props.updatedAt = rejectedAt;
   }
 
+  void(staffId: string, reason: string, voidedAt: Date = new Date()): void {
+    if (this.props.status === PaymentAttemptStatus.VOIDED) {
+      throw new DomainError(PaymentAttemptDomainErrorCode.PAYMENT_ALREADY_VOIDED);
+    }
+    if (this.props.status !== PaymentAttemptStatus.CONFIRMED) {
+      throw new DomainError(PaymentAttemptDomainErrorCode.PAYMENT_NOT_CONFIRMED);
+    }
+
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      throw new DomainError(PaymentAttemptDomainErrorCode.VOID_REASON_REQUIRED);
+    }
+
+    const voidedByStaffId = staffId.trim();
+    if (!voidedByStaffId) {
+      throw new DomainError('FIELD_REQUIRED');
+    }
+
+    const metadata = { ...(this.props.metadata ?? {}) };
+    metadata.voided = true;
+    metadata.voidReason = trimmedReason;
+    metadata.voidedByStaffId = voidedByStaffId;
+    metadata.voidedAt = voidedAt.toISOString();
+
+    this.props.status = PaymentAttemptStatus.VOIDED;
+    this.props.metadata = metadata;
+    this.props.updatedAt = voidedAt;
+  }
+
   isPending(): boolean {
     return this.props.status === PaymentAttemptStatus.PENDING;
   }
@@ -129,7 +164,8 @@ export class PaymentAttempt {
   isTerminal(): boolean {
     return (
       this.props.status === PaymentAttemptStatus.CONFIRMED ||
-      this.props.status === PaymentAttemptStatus.REJECTED
+      this.props.status === PaymentAttemptStatus.REJECTED ||
+      this.props.status === PaymentAttemptStatus.VOIDED
     );
   }
 

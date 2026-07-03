@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { InstallmentDomainErrorCode } from './errors.js';
+import { compareTehranDates } from './date.utils.js';
 import {
   InstallmentDraft,
   InstallmentProps,
@@ -179,6 +180,116 @@ export class Installment {
     return this.props.metadata;
   }
 
+  /**
+   * Applies a confirmed payment to installment state (IFP-092).
+   * Principal payments track `metadata.paidRial`; fee payments track `metadata.feesCollectedRial`.
+   */
+  applyPayment(input: {
+    amountRial: bigint;
+    isFeePayment: boolean;
+    confirmedByStaffId: string;
+    confirmedPrincipalRialBefore: bigint;
+    confirmedAt?: Date;
+  }): void {
+    if (input.amountRial <= 0n) {
+      throw new DomainError('AMOUNT_MUST_BE_POSITIVE');
+    }
+
+    if (this.props.status === InstallmentStatus.WAIVED) {
+      throw new DomainError(InstallmentDomainErrorCode.INSTALLMENT_ALREADY_WAIVED);
+    }
+
+    const confirmedAt = input.confirmedAt ?? new Date();
+    const metadata = { ...(this.props.metadata ?? {}) };
+
+    if (input.isFeePayment) {
+      const feesCollected = parseMetadataBigInt(metadata.feesCollectedRial);
+      metadata.feesCollectedRial = (feesCollected + input.amountRial).toString();
+      this.props.metadata = metadata;
+      this.props.updatedAt = confirmedAt;
+      return;
+    }
+
+    if (this.props.status === InstallmentStatus.PAID) {
+      throw new DomainError(InstallmentDomainErrorCode.INSTALLMENT_ALREADY_PAID);
+    }
+
+    const newTotalPrincipal = input.confirmedPrincipalRialBefore + input.amountRial;
+    if (newTotalPrincipal > this.props.amountRial) {
+      throw new DomainError('AMOUNT_EXCEEDS_REMAINING');
+    }
+
+    metadata.paidRial = newTotalPrincipal.toString();
+    this.props.metadata = metadata;
+
+    if (newTotalPrincipal >= this.props.amountRial) {
+      this.markPaid(input.confirmedByStaffId, confirmedAt);
+      return;
+    }
+
+    this.props.updatedAt = confirmedAt;
+  }
+
+  /**
+   * Reverses a voided confirmed payment on installment state (IFP-094).
+   */
+  revertPayment(input: {
+    amountRial: bigint;
+    isFeePayment: boolean;
+    voidedAt?: Date;
+    now?: Date;
+  }): void {
+    if (input.amountRial <= 0n) {
+      throw new DomainError('AMOUNT_MUST_BE_POSITIVE');
+    }
+
+    const voidedAt = input.voidedAt ?? new Date();
+    const now = input.now ?? voidedAt;
+    const metadata = { ...(this.props.metadata ?? {}) };
+
+    if (input.isFeePayment) {
+      const feesCollected = parseMetadataBigInt(metadata.feesCollectedRial);
+      if (feesCollected < input.amountRial) {
+        throw new DomainError('VOID_FULL_ONLY');
+      }
+
+      const remainingFees = feesCollected - input.amountRial;
+      if (remainingFees > 0n) {
+        metadata.feesCollectedRial = remainingFees.toString();
+      } else {
+        delete metadata.feesCollectedRial;
+      }
+
+      this.props.metadata = metadata;
+      this.props.updatedAt = voidedAt;
+      return;
+    }
+
+    const paidRial = parseMetadataBigInt(metadata.paidRial);
+    if (paidRial < input.amountRial) {
+      throw new DomainError('VOID_FULL_ONLY');
+    }
+
+    const newPaidRial = paidRial - input.amountRial;
+    if (newPaidRial > 0n) {
+      metadata.paidRial = newPaidRial.toString();
+    } else {
+      delete metadata.paidRial;
+    }
+
+    if (this.props.status === InstallmentStatus.PAID && newPaidRial < this.props.amountRial) {
+      this.props.status =
+        compareTehranDates(this.props.dueDate, now) < 0
+          ? InstallmentStatus.OVERDUE
+          : InstallmentStatus.PENDING;
+      this.props.paidAt = null;
+      this.props.confirmedByStaffId = null;
+    }
+
+    this.props.metadata = metadata;
+    this.props.updatedAt = voidedAt;
+  }
+
   get createdAt(): Date {
     return this.props.createdAt;
   }
@@ -201,4 +312,20 @@ export class Installment {
       throw new DomainError(InstallmentDomainErrorCode.INSTALLMENT_STATUS_INVALID);
     }
   }
+}
+
+function parseMetadataBigInt(value: unknown): bigint {
+  if (typeof value === 'bigint') {
+    return value;
+  }
+
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    return BigInt(value);
+  }
+
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    return BigInt(value);
+  }
+
+  return 0n;
 }

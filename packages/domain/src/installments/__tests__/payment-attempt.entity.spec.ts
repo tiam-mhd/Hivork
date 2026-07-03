@@ -154,6 +154,39 @@ describe('PaymentAttempt entity (TASK-067)', () => {
     });
   });
 
+  describe('void', () => {
+    it('voids from confirmed with metadata', () => {
+      const attempt = PaymentAttempt.report(baseReportInput(), InstallmentStatus.PENDING);
+      attempt.confirm('staff-1');
+
+      attempt.void('staff-void-1', 'ثبت اشتباه');
+
+      expect(attempt.status).toBe(PaymentAttemptStatus.VOIDED);
+      expect(attempt.metadata?.voidReason).toBe('ثبت اشتباه');
+      expect(attempt.metadata?.voidedByStaffId).toBe('staff-void-1');
+      expect(attempt.metadata?.voidedAt).toBeTruthy();
+      expect(attempt.isTerminal()).toBe(true);
+    });
+
+    it('rejects void from pending', () => {
+      const attempt = PaymentAttempt.report(baseReportInput(), InstallmentStatus.PENDING);
+
+      expect(() => attempt.void('staff-1', 'دلیل')).toThrow(
+        new DomainError(PaymentAttemptDomainErrorCode.PAYMENT_NOT_CONFIRMED),
+      );
+    });
+
+    it('rejects void when already voided', () => {
+      const attempt = PaymentAttempt.report(baseReportInput(), InstallmentStatus.PENDING);
+      attempt.confirm('staff-1');
+      attempt.void('staff-1', 'اول');
+
+      expect(() => attempt.void('staff-2', 'دوم')).toThrow(
+        new DomainError(PaymentAttemptDomainErrorCode.PAYMENT_ALREADY_VOIDED),
+      );
+    });
+  });
+
   describe('reconstitute', () => {
     it('round-trips via toProps', () => {
       const created = PaymentAttempt.report(

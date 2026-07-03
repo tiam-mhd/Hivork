@@ -7,6 +7,7 @@ export enum PaymentAttemptStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
   REJECTED = 'REJECTED',
+  VOIDED = 'VOIDED',
 }
 
 export interface PaymentAttemptProps {

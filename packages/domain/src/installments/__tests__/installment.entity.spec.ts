@@ -169,6 +169,60 @@ describe('Installment entity (TASK-066)', () => {
     });
   });
 
+  describe('applyPayment', () => {
+    it('marks installment paid when principal fully covered', () => {
+      const installment = Installment.create(baseDraft({ amountRial: 10_000_000n }));
+      installment.applyPayment({
+        amountRial: 10_000_000n,
+        isFeePayment: false,
+        confirmedByStaffId: 'staff-1',
+        confirmedPrincipalRialBefore: 0n,
+      });
+
+      expect(installment.status).toBe(InstallmentStatus.PAID);
+      expect(installment.metadata?.paidRial).toBe('10000000');
+    });
+
+    it('tracks partial principal without marking paid', () => {
+      const installment = Installment.create(baseDraft({ amountRial: 10_000_000n }));
+      installment.applyPayment({
+        amountRial: 4_000_000n,
+        isFeePayment: false,
+        confirmedByStaffId: 'staff-1',
+        confirmedPrincipalRialBefore: 0n,
+      });
+
+      expect(installment.status).toBe(InstallmentStatus.PENDING);
+      expect(installment.metadata?.paidRial).toBe('4000000');
+    });
+
+    it('tracks fee payments separately', () => {
+      const installment = Installment.create(baseDraft({ amountRial: 10_000_000n }));
+      installment.applyPayment({
+        amountRial: 500_000n,
+        isFeePayment: true,
+        confirmedByStaffId: 'staff-1',
+        confirmedPrincipalRialBefore: 0n,
+      });
+
+      expect(installment.status).toBe(InstallmentStatus.PENDING);
+      expect(installment.metadata?.feesCollectedRial).toBe('500000');
+    });
+
+    it('rejects principal exceeding remaining amount', () => {
+      const installment = Installment.create(baseDraft({ amountRial: 5_000_000n }));
+
+      expect(() =>
+        installment.applyPayment({
+          amountRial: 6_000_000n,
+          isFeePayment: false,
+          confirmedByStaffId: 'staff-1',
+          confirmedPrincipalRialBefore: 0n,
+        }),
+      ).toThrow(new DomainError('AMOUNT_EXCEEDS_REMAINING'));
+    });
+  });
+
   describe('create / reconstitute', () => {
     it('creates from draft with zero amount (BR-004)', () => {
       const installment = Installment.create(baseDraft({ amountRial: 0n }));
