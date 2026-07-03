@@ -31,6 +31,7 @@ export const envSchema = z.object({
   PDF_MAX_ROWS: z.coerce.number().int().positive().default(500),
   FILE_STORAGE_PATH: z.string().default('./data/file-storage'),
   FILE_STORAGE_SIGNING_SECRET: z.string().min(32).optional(),
+  PAYMENT_GATEWAY_WEBHOOK_SECRET: z.string().optional(),
   API_PUBLIC_URL: z.string().url().default('http://localhost:4000'),
 });
 

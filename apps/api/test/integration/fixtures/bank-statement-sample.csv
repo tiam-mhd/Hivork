@@ -1,0 +1,3 @@
+date,reference,amountRial,description
+1405/07/15,TRACE-PHASE06,7000000,POS payment
+1405/07/16,BANK-MISMATCH,1000000,Bank-only row

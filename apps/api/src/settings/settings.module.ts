@@ -1,8 +1,10 @@
 import {
   AUDIT_SERVICE,
   GetInstallmentSettingsUseCase,
+  GetPaymentMethodSettingsUseCase,
   GetSecuritySettingsUseCase,
   GetSettingsUseCase,
+  UpdatePaymentMethodSettingsUseCase,
   type AuditService,
   UpdateInstallmentSettingsUseCase,
   UpdateSecuritySettingsUseCase,
@@ -11,6 +13,8 @@ import {
 import {
   PrismaModule,
   PrismaModuleEntitlement,
+  PrismaPaymentAttemptRepository,
+  PrismaTenantPlanReader,
   PrismaTenantSettingsRepository,
   PrismaTenantSequenceRepository,
   PrismaUnitOfWork,
@@ -21,15 +25,18 @@ import { Module } from '@nestjs/common';
 import { AuthCommonModule } from '../common/auth-common.module';
 import { SettingsController } from './settings.controller';
 import { SecuritySettingsController } from './security-settings.controller.js';
+import { PaymentMethodSettingsController } from './payment-method-settings.controller.js';
 
 @Module({
   imports: [PrismaModule, AuthCommonModule],
-  controllers: [SettingsController, SecuritySettingsController],
+  controllers: [SettingsController, SecuritySettingsController, PaymentMethodSettingsController],
   providers: [
     SettingsSchemaRegistry,
     PrismaTenantSettingsRepository,
     PrismaTenantSequenceRepository,
     PrismaModuleEntitlement,
+    PrismaTenantPlanReader,
+    PrismaPaymentAttemptRepository,
     PrismaUnitOfWork,
     {
       provide: GetSettingsUseCase,
@@ -100,6 +107,41 @@ import { SecuritySettingsController } from './security-settings.controller.js';
       inject: [
         GetSecuritySettingsUseCase,
         PrismaTenantSettingsRepository,
+        AUDIT_SERVICE,
+        PrismaUnitOfWork,
+      ],
+    },
+    {
+      provide: GetPaymentMethodSettingsUseCase,
+      useFactory: (
+        moduleEntitlement: PrismaModuleEntitlement,
+        settingsRepository: PrismaTenantSettingsRepository,
+      ) => new GetPaymentMethodSettingsUseCase(moduleEntitlement, settingsRepository),
+      inject: [PrismaModuleEntitlement, PrismaTenantSettingsRepository],
+    },
+    {
+      provide: UpdatePaymentMethodSettingsUseCase,
+      useFactory: (
+        getSettings: GetPaymentMethodSettingsUseCase,
+        settingsRepository: PrismaTenantSettingsRepository,
+        tenantPlans: PrismaTenantPlanReader,
+        paymentAttempts: PrismaPaymentAttemptRepository,
+        audit: AuditService,
+        unitOfWork: PrismaUnitOfWork,
+      ) =>
+        new UpdatePaymentMethodSettingsUseCase(
+          getSettings,
+          settingsRepository,
+          tenantPlans,
+          paymentAttempts,
+          audit,
+          unitOfWork,
+        ),
+      inject: [
+        GetPaymentMethodSettingsUseCase,
+        PrismaTenantSettingsRepository,
+        PrismaTenantPlanReader,
+        PrismaPaymentAttemptRepository,
         AUDIT_SERVICE,
         PrismaUnitOfWork,
       ],

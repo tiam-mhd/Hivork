@@ -23,6 +23,7 @@ export function toSaleInstallmentResponse(installment: SaleDetail['installments'
     status: installment.status,
     ...(installment.paidAt !== undefined ? { paidAt: installment.paidAt } : {}),
     ...(installment.confirmedBy !== undefined ? { confirmedBy: installment.confirmedBy } : {}),
+    version: installment.version,
   };
 }
 

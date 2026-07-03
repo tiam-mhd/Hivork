@@ -115,4 +115,8 @@ export class AppConfigService {
   get publicApiBaseUrl(): string {
     return this.config.get('API_PUBLIC_URL', { infer: true });
   }
+
+  get paymentGatewayWebhookSecret(): string {
+    return this.config.get('PAYMENT_GATEWAY_WEBHOOK_SECRET', { infer: true }) ?? '';
+  }
 }

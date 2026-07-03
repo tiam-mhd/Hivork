@@ -33,6 +33,9 @@ import {
   ListContractVersionsUseCase,
   ListSalesUseCase,
   OUTBOX_PUBLISHER,
+  PreviewRegenerateInstallmentsUseCase,
+  RegenerateInstallmentsUseCase,
+  MergeInstallmentsUseCase,
   RestoreSaleUseCase,
   SALE_COPY_RELATED_REPOSITORY,
   SALE_IDEMPOTENCY_STORE,
@@ -55,6 +58,7 @@ import {
   PrismaContractCollateralRepository,
   PrismaContractNumberAllocator,
   PrismaContractVersionRepository,
+  PrismaInstallmentOperationLogRepository,
   PrismaInstallmentRepository,
   PrismaSaleLineItemRepository,
   PrismaModule,
@@ -63,6 +67,7 @@ import {
   PrismaSaleRepository,
   PrismaTenantCustomerRepository,
   PrismaTenantPlanReader,
+  PrismaTenantSettingsRepository,
   PrismaUnitOfWork,
   RedisReportCache,
 } from '@hivork/infrastructure';
@@ -70,6 +75,7 @@ import { Module } from '@nestjs/common';
 
 import { AuthCommonModule } from '../../common/auth-common.module.js';
 import { ReportsModule } from '../reports/reports.module.js';
+import { SaleInstallmentsController } from './sale-installments.controller.js';
 import { SalesController } from './sales.controller.js';
 import { SalesEnterpriseController } from './sales-enterprise.controller.js';
 import { SaleGuarantorsController } from './sale-guarantors.controller.js';
@@ -83,12 +89,15 @@ import { SaleFinancialsController } from './sale-financials.controller.js';
     SaleGuarantorsController,
     SaleCollateralsController,
     SaleFinancialsController,
+    SaleInstallmentsController,
     SalesController,
   ],
   providers: [
     PrismaUnitOfWork,
     PrismaSaleRepository,
     PrismaInstallmentRepository,
+    PrismaInstallmentOperationLogRepository,
+    PrismaTenantSettingsRepository,
     PrismaTenantCustomerRepository,
     PrismaBranchReader,
     PrismaTenantPlanReader,
@@ -723,6 +732,87 @@ import { SaleFinancialsController } from './sale-financials.controller.js';
         reportCache: RedisReportCache,
       ) => new RestoreSaleUseCase(unitOfWork, sales, audit, reportCache),
       inject: [PrismaUnitOfWork, PrismaSaleRepository, AUDIT_SERVICE, RedisReportCache],
+    },
+    {
+      provide: PreviewRegenerateInstallmentsUseCase,
+      useFactory: (
+        sales: PrismaSaleRepository,
+        installments: PrismaInstallmentRepository,
+        branches: PrismaBranchReader,
+        tenantSettings: PrismaTenantSettingsRepository,
+      ) =>
+        new PreviewRegenerateInstallmentsUseCase(
+          sales,
+          installments,
+          branches,
+          tenantSettings,
+        ),
+      inject: [
+        PrismaSaleRepository,
+        PrismaInstallmentRepository,
+        PrismaBranchReader,
+        PrismaTenantSettingsRepository,
+      ],
+    },
+    {
+      provide: RegenerateInstallmentsUseCase,
+      useFactory: (
+        unitOfWork: PrismaUnitOfWork,
+        sales: PrismaSaleRepository,
+        installments: PrismaInstallmentRepository,
+        operationLogs: PrismaInstallmentOperationLogRepository,
+        branches: PrismaBranchReader,
+        tenantSettings: PrismaTenantSettingsRepository,
+        audit: AuditService,
+      ) =>
+        new RegenerateInstallmentsUseCase(
+          unitOfWork,
+          sales,
+          installments,
+          operationLogs,
+          branches,
+          tenantSettings,
+          audit,
+        ),
+      inject: [
+        PrismaUnitOfWork,
+        PrismaSaleRepository,
+        PrismaInstallmentRepository,
+        PrismaInstallmentOperationLogRepository,
+        PrismaBranchReader,
+        PrismaTenantSettingsRepository,
+        AUDIT_SERVICE,
+      ],
+    },
+    {
+      provide: MergeInstallmentsUseCase,
+      useFactory: (
+        unitOfWork: PrismaUnitOfWork,
+        sales: PrismaSaleRepository,
+        installments: PrismaInstallmentRepository,
+        operationLogs: PrismaInstallmentOperationLogRepository,
+        branches: PrismaBranchReader,
+        tenantSettings: PrismaTenantSettingsRepository,
+        audit: AuditService,
+      ) =>
+        new MergeInstallmentsUseCase(
+          unitOfWork,
+          sales,
+          installments,
+          operationLogs,
+          branches,
+          tenantSettings,
+          audit,
+        ),
+      inject: [
+        PrismaUnitOfWork,
+        PrismaSaleRepository,
+        PrismaInstallmentRepository,
+        PrismaInstallmentOperationLogRepository,
+        PrismaBranchReader,
+        PrismaTenantSettingsRepository,
+        AUDIT_SERVICE,
+      ],
     },
   ],
 })

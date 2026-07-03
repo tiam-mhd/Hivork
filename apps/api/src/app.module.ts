@@ -23,6 +23,7 @@ import { RolesModule } from './core/roles/roles.module';
 import { InstallmentsModule as InstallmentsApiModule } from './installments/installments/installments.module';
 import { SalesModule } from './installments/sales/sales.module';
 import { ReportsModule } from './installments/reports/reports.module';
+import { WebhooksModule } from './webhooks/webhooks.module.js';
 import { StaffModule } from './core/staff/staff.module';
 import { SettingsModule } from './settings/settings.module';
 import { ApiKeysModule } from './settings/api-keys.module.js';
@@ -70,6 +71,7 @@ import { TenantsModule } from './tenants/tenants.module';
     SalesModule,
     InstallmentsApiModule,
     ReportsModule,
+    WebhooksModule,
     SettingsModule,
     ApiKeysModule,
     TenantsModule,
